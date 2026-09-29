@@ -1,0 +1,260 @@
+import { StrictMode, useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Clock3, Copy, Database, HeartPulse, History, Info, LoaderCircle, LockKeyhole, LogOut, MessageCircle, Plus, RefreshCw, Search, Send, Settings2, ShieldCheck, Sparkles, Stethoscope, Trash2, UsersRound, X } from "lucide-react";
+import { api } from "./api";
+import clinicianImage from "./assets/vitarecall-walrus-clinician.png";
+import memoryImage from "./assets/memory-current.png";
+import "./live.css";
+
+const NAV = [
+  { id: "chat", label: "Chat with Vita", icon: MessageCircle },
+  { id: "memory", label: "Patient memory", icon: Database },
+  { id: "plan", label: "Notes & care plan", icon: ClipboardList },
+  { id: "settings", label: "Settings", icon: Settings2 },
+];
+const date = value => value ? new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
+const initials = name => (name || "V").split(/\s+/).map(x => x[0]).slice(0, 2).join("").toUpperCase();
+function Brand({ light = false }) { return <div className={`brand ${light ? "light" : ""}`}><span className="brand-symbol"><HeartPulse size={22} /></span><span>Vita<span>Recall</span></span></div>; }
+function Spinner() { return <LoaderCircle className="spin" size={17} aria-hidden="true" />; }
+function Empty({ icon: Icon = Sparkles, title, children }) { return <div className="empty"><span className="empty-icon"><Icon size={24} /></span><h3>{title}</h3><p>{children}</p></div>; }
+function Notice({ children, type = "info" }) { return <div className={`notice ${type}`} role={type === "error" ? "alert" : "status"}><Info size={17} /><span>{children}</span></div>; }
+function Avatar({ user, small = false }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [user?.avatarUrl]);
+  return <span className={`avatar ${small ? "small" : ""}`}>{user?.avatarUrl && !failed ? <img src={user.avatarUrl} alt={`${user.name}'s profile`} onError={() => setFailed(true)} /> : initials(user?.name)}</span>;
+}
+function VitaAvatar({ large = false }) { return <span className={large ? "large-vita walrus-avatar" : "vita-orb walrus-avatar"}><img src={clinicianImage} alt="Vita the walrus care companion" /></span>; }
+const blobUrl = id => `https://aggregator.walrus-mainnet.walrus.space/v1/blobs/${encodeURIComponent(id)}?strict_consistency_check=true`;
+function MemoryTrace({ trace }) {
+  if (!trace) return null;
+  const labels = { recalled: `${trace.sourceCount} Walrus memor${trace.sourceCount === 1 ? "y" : "ies"} retrieved`, empty: "Walrus checked · no matching memory", unavailable: "Walrus recall unavailable for this reply", "not-configured": "Walrus not configured" };
+  return <div className={`memory-trace ${trace.status}`}><Database size={12} /><span>{labels[trace.status] || "Memory status unavailable"}{trace.historyUsed === false ? " · No previous chat history sent" : ""}</span></div>;
+}
+function CopyButton({ value, label = "Copy" }) {
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState(false);
+  return <span className="copy-wrap"><button type="button" className="text-button" onClick={async () => { try { await navigator.clipboard.writeText(value); setCopied(true); setError(false); window.setTimeout(() => setCopied(false), 2000); } catch { setError(true); } }}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? "Copied" : label}</button>{error && <small role="status">Select the text to copy it.</small>}</span>;
+}
+
+function Auth({ onSession }) {
+  const [mode, setMode] = useState("demo");
+  const [emailMode, setEmailMode] = useState("login");
+  const [role, setRole] = useState("patient");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const email = mode === "email";
+  const register = email && emailMode === "register";
+  async function submit(event) {
+    event.preventDefault(); setBusy(true); setError("");
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const endpoint = email ? `/auth/${register ? "register" : "login"}` : mode === "restore" ? "/auth/demo/restore" : "/auth/demo";
+    try { onSession(await api(endpoint, { method: "POST", body: { ...values, role } })); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+  return <main className="auth-layout">
+    <section className="auth-story"><Brand light /><div className="auth-heading"><span className="eyebrow"><Sparkles size={14} /> CARE THAT REMEMBERS</span><h1>Your story.<br />Better connected.</h1><p>A calmer space to prepare for care, keep track of what matters, and pick up where you left off.</p></div><div className="auth-art"><img src={clinicianImage} alt="A friendly illustrated walrus clinician holding a tablet" /><div className="art-note"><ShieldCheck size={22} /><span><strong>A little continuity goes a long way.</strong><small>Patient-led memory. Clear sources.</small></span></div></div><p className="auth-footer">Made for patients. Connected with their care team.</p></section>
+    <section className="auth-form-section"><div className="mobile-brand"><Brand /></div><div className="auth-form-card"><VitaAvatar large /><p className="eyebrow">A CHATBOT THAT REMEMBERS</p><h2>{email ? register ? "Let's get to know you." : "Welcome back." : mode === "restore" ? "Pick up your story." : "Meet your walrus doc."}</h2><p className="muted">{email ? "Your existing email account still works here." : mode === "restore" ? "Use your private recovery code to reopen the same memory workspace, even on another device." : "Just a username to explore. A caring AI companion, with memories you can actually verify."}</p><div className="auth-tabs"><button type="button" className={mode === "demo" ? "selected" : ""} onClick={() => { setMode("demo"); setError(""); }}>Try the demo</button><button type="button" className={mode === "restore" ? "selected" : ""} onClick={() => { setMode("restore"); setError(""); }}>Restore demo</button><button type="button" className={email ? "selected" : ""} onClick={() => { setMode("email"); setError(""); }}>Email account</button></div>
+      {email && <div className="email-mode"><button className={`text-button ${!register ? "selected" : ""}`} onClick={() => setEmailMode("login")}>Sign in</button><button className={`text-button ${register ? "selected" : ""}`} onClick={() => setEmailMode("register")}>Create account</button></div>}
+      <form onSubmit={submit} className="form-stack">
+        {!email && <label>X / Twitter username<input name="username" aria-label="X / Twitter username" aria-describedby="username-help" autoComplete="username" maxLength={16} pattern="@?[A-Za-z0-9_]{1,15}" required placeholder="@yourusername" /><small id="username-help">A demo label, not verified X sign-in. Public profile images are provided by unavatar.io, with initials as a fallback.</small></label>}
+        {mode === "restore" && <label>Private recovery code<input name="recoveryCode" type="password" autoComplete="off" required maxLength={200} placeholder="The code saved when you joined" /></label>}
+        {register && <label>Your name<input name="name" autoComplete="name" minLength={2} maxLength={80} required placeholder="e.g. Ada Okafor" /></label>}
+        {(register || mode === "demo") && <fieldset className="role-options"><legend>{email ? "I’m joining as a" : "Explore the demo as a"}</legend>{["patient", "clinician"].map(value => <label key={value}><input type="radio" name="accountRole" checked={role === value} onChange={() => setRole(value)} /><span>{value === "patient" ? <HeartPulse size={17} /> : <Stethoscope size={17} />}{value === "patient" ? "Patient" : "Clinician"}</span></label>)}</fieldset>}
+        {mode === "demo" && role === "clinician" && <p className="small-text muted">No invitation needed for this demo. You get a fictional patient workspace; this does not grant clinical credentials or access to other patients.</p>}
+        {email && <><label>Email address<input name="email" type="email" autoComplete="email" maxLength={254} required placeholder="you@example.com" /></label><label>Password<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} minLength={register ? 12 : 1} maxLength={128} required placeholder={register ? "At least 12 characters" : "Your password"} /></label></>}
+        {register && role === "clinician" && <label>Clinic invitation code<input name="inviteCode" type="password" required autoComplete="off" aria-label="Clinic invitation code" aria-describedby="invite-help" /><small id="invite-help">Your workspace administrator provides this code.</small></label>}
+        {error && <Notice type="error">{error}</Notice>}
+        <button className="button primary full" disabled={busy}>{busy ? <Spinner /> : <ArrowRight size={18} />}{busy ? "Please wait…" : email ? register ? "Create my account" : "Sign in to VitaRecall" : mode === "restore" ? "Restore my workspace" : "Start chatting with Vita"}</button>
+      </form><div className="pilot-note"><ShieldCheck size={16} /><p>Hackathon pilot · Fictional patient information only. Vita is an AI companion, not a doctor. <a href="https://unavatar.io" target="_blank" rel="noreferrer">Avatars by Unavatar</a>.</p></div></div></section>
+  </main>;
+}
+
+function App() {
+  const [session, setSession] = useState(null);
+  const [booting, setBooting] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [patients, setPatients] = useState([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [workspace, setWorkspace] = useState(null);
+  const [tab, setTab] = useState("chat");
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState({});
+  const [chatDraft, setChatDraft] = useState("");
+  const [memoryDraft, setMemoryDraft] = useState("");
+  const [recallQuery, setRecallQuery] = useState("");
+  const [recallResults, setRecallResults] = useState(null);
+  const [verification, setVerification] = useState(null);
+  const [showLink, setShowLink] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const scope = useRef("");
+  const generation = useRef(0);
+  const pendingChat = useRef(null);
+  const pendingMemory = useRef(null);
+  const chatEnd = useRef(null);
+  const user = session?.user;
+  const patient = workspace?.patient;
+  const services = workspace?.services || session?.services || {};
+  const isPatient = user?.role === "patient";
+  const canConsent = isPatient || Boolean(user?.isDemo && patient?.canManageConsent);
+  const base = `/patients/${selectedId}`;
+
+  function acceptSession(next) { setRecoveryCode(next.recoveryCode || ""); setSession(next); }
+
+  async function boot() {
+    setBooting(true); setError("");
+    try { setSession(await api("/session")); } catch (e) { setError(e.message); }
+    finally { setBooting(false); }
+  }
+  useEffect(() => { boot(); }, []);
+  useEffect(() => {
+    const current = ++generation.current;
+    setPatients([]); setSelectedId(""); setWorkspace(null); setTab("chat"); setError(""); setNotice("");
+    setChatDraft(""); setMemoryDraft(""); setRecallResults(null); setVerification(null); setBusy({});
+    if (!user) return;
+    setLoading(true);
+    api("/patients").then(data => { if (current !== generation.current) return; setPatients(data.patients); setSelectedId(data.patients[0]?.id || ""); }).catch(e => { if (current === generation.current) setError(e.message); }).finally(() => { if (current === generation.current) setLoading(false); });
+  }, [user?.id]);
+  useEffect(() => {
+    scope.current = selectedId;
+    setWorkspace(null); setChatDraft(""); setMemoryDraft(""); setRecallResults(null); setRecallQuery(""); pendingChat.current = null; pendingMemory.current = null;
+    if (!selectedId) return;
+    let active = true;
+    setLoading(true);
+    api(`/patients/${selectedId}/workspace`).then(data => { if (active) setWorkspace(data); }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [selectedId]);
+  useEffect(() => {
+    const conversation = chatEnd.current?.parentElement;
+    if (conversation && (workspace?.messages.length || busy.chat)) conversation.scrollTo({ top: conversation.scrollHeight, behavior: "smooth" });
+  }, [workspace?.messages.length, busy.chat]);
+
+  async function perform(key, action) {
+    const currentGeneration = generation.current;
+    setBusy(b => ({ ...b, [key]: true })); setError(""); setNotice("");
+    try { await action(); }
+    catch (e) { if (generation.current === currentGeneration) { setError(e.message); if (e.status === 401) await boot(); } }
+    finally { if (generation.current === currentGeneration) setBusy(b => ({ ...b, [key]: false })); }
+  }
+  function updatePatient(p) { setWorkspace(w => w && w.patient.id === p.id ? { ...w, patient: p } : w); setPatients(items => items.map(item => item.id === p.id ? p : item)); }
+  function updateMemory(memory, patientId = selectedId) {
+    setWorkspace(w => {
+      if (!w || w.patient.id !== patientId || patientId !== scope.current) return w;
+      const memories = w.memories.some(m => m.id === memory.id) ? w.memories.map(m => m.id === memory.id ? memory : m) : [memory, ...w.memories];
+      return { ...w, memories, stats: { ...w.stats, storedBlobs: new Set(memories.filter(m => m.status === "stored").map(m => m.blobId)).size } };
+    });
+  }
+  const processing = workspace?.memories.filter(m => m.status === "processing").map(m => m.id).join(",") || "";
+  useEffect(() => {
+    if (!processing || !selectedId) return;
+    let active = true, attempts = 0, timer;
+    async function poll() {
+      for (const id of processing.split(",")) {
+        if (!active) break;
+        try { const data = await api(`/patients/${selectedId}/memories/${id}/status`); if (active && scope.current === selectedId) updateMemory(data.memory); }
+        catch { /* A transient error never changes a pending receipt into a success. */ }
+      }
+      if (active && ++attempts < 20) timer = window.setTimeout(poll, 5000);
+      else if (active) setNotice("Storage is taking longer than usual. Use Refresh receipt to check again later.");
+    }
+    timer = window.setTimeout(poll, 1500);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [processing, selectedId]);
+
+  async function sendChat(event) {
+    event.preventDefault();
+    const text = chatDraft.trim(), id = selectedId, currentGeneration = generation.current;
+    if (!text || busy.chat || busy.newConversation || !services.chatConfigured) return;
+    if (pendingChat.current?.text !== text) pendingChat.current = { text, requestId: crypto.randomUUID() };
+    await perform("chat", async () => {
+      try {
+        const result = await api(`${base}/chat`, { method: "POST", body: { message: text, requestId: pendingChat.current.requestId } });
+        if (scope.current === id && generation.current === currentGeneration) { setWorkspace(w => w ? ({ ...w, messages: [...w.messages.filter(m => ![result.userMessage.id, result.assistantMessage.id].includes(m.id)), result.userMessage, result.assistantMessage] }) : w); setChatDraft(""); }
+        pendingChat.current = null;
+      } catch (e) { if (e.status) pendingChat.current = null; throw e; }
+    });
+  }
+  async function saveMemory(event) {
+    event.preventDefault(); const text = memoryDraft.trim(), id = selectedId;
+    if (!text || busy.memory) return;
+    if (pendingMemory.current?.text !== text) pendingMemory.current = { text, requestId: crypto.randomUUID() };
+    await perform("memory", async () => {
+      try {
+        const result = await api(`${base}/memories`, { method: "POST", body: { text, requestId: pendingMemory.current.requestId } });
+        if (scope.current === id) { updateMemory(result.memory); setMemoryDraft(""); setNotice(result.memory.status === "unknown" ? "Submission is unconfirmed. Check the account before saving again." : "Memory submitted. Its receipt will update when Walrus confirms storage."); }
+        pendingMemory.current = null;
+      } catch (e) { if (e.status) pendingMemory.current = null; throw e; }
+    });
+  }
+  async function logout() {
+    await perform("logout", async () => { const result = await api("/auth/logout", { method: "POST", body: {} }); scope.current = ""; acceptSession(result); });
+  }
+  async function refreshConnections() {
+    await perform("refreshConnections", async () => {
+      const nextSession = await api("/session");
+      setSession(nextSession);
+      if (selectedId) { const id = selectedId; const nextWorkspace = await api(`${base}/workspace`); if (scope.current === id) setWorkspace(nextWorkspace); }
+      setNotice("Connection settings refreshed. A configured key still needs a successful live call to prove it works.");
+    });
+  }
+  async function newConversation() {
+    await perform("newConversation", async () => {
+      const id = selectedId;
+      await api(`${base}/conversation/reset`, { method: "POST", body: {} });
+      if (scope.current === id) { setWorkspace(w => w && ({ ...w, messages: [] })); setChatDraft(""); pendingChat.current = null; setNotice("Fresh conversation started. Earlier chat messages will not be sent to Gemini. Saved Walrus memories can still be recalled."); }
+    });
+  }
+
+  if (booting) return <div className="boot"><Brand /><Spinner /><p>Opening your care workspace…</p></div>;
+  if (!session) return <div className="boot"><Brand /><Notice type="error">{error || "The server is unavailable."}</Notice><button className="button primary" onClick={boot}>Try again</button></div>;
+  if (!user) return <Auth onSession={acceptSession} />;
+
+  const stored = workspace?.stats.storedBlobs || 0;
+  const completed = workspace?.tasks.filter(task => task.completed).length || 0;
+  function changeTab(value) { setTab(value); setError(""); setNotice(""); }
+  return <div className="app-shell">
+    <aside className="sidebar"><Brand light /><div className="workspace-label"><span className="workspace-symbol">{isPatient ? <HeartPulse size={19} /> : <Stethoscope size={19} />}</span><span><strong>{isPatient ? "My care space" : user.isDemo ? "Clinician demo" : "Clinical workspace"}</strong><small>{user.isDemo ? "Walrus Memory demo" : isPatient ? "Patient portal" : "Care team"}</small></span></div><span className="nav-title">WORKSPACE</span><nav aria-label="Primary navigation">{NAV.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${tab === id ? "active" : ""}`} onClick={() => changeTab(id)}><Icon size={19} /><span>{label}</span>{id === "memory" && stored > 0 && <b>{stored}</b>}</button>)}</nav><div className="sidebar-bottom"><div className="sidebar-tip"><ShieldCheck size={23} /><h3>You stay in control.</h3><p>Choose what to remember and who can access your care space.</p><button onClick={() => changeTab("settings")}>Memory & privacy <ArrowRight size={14} /></button></div><div className="profile"><Avatar user={user} /><span><strong>{user.name}</strong><small>{user.isDemo ? `${isPatient ? "Patient" : "Clinician"} demo · unverified` : isPatient ? "Patient account" : "Invited clinician"}</small></span><button aria-label="Sign out" title="Sign out" onClick={logout} disabled={busy.logout}><LogOut size={18} /></button></div></div></aside>
+    <main className="main-workspace"><header className="topbar"><div className="mobile-brand"><Brand /></div><div className="breadcrumbs"><span>{isPatient ? "My care space" : user.isDemo ? "Clinician demo" : "Care team"}</span><ChevronRight size={14} /><strong>{NAV.find(n => n.id === tab).label}</strong></div><div className="top-actions"><span className="pilot-tag">Synthetic-data pilot</span><Avatar user={user} small /><button className="mobile-logout icon-button" aria-label="Sign out" onClick={logout}><LogOut size={18} /></button></div></header>
+      <div className="page-content">
+        {recoveryCode && <section className="recovery-banner" aria-label="Save your recovery code"><LockKeyhole size={22} /><div><h2>Save your private recovery code</h2><p>Your username alone cannot reopen this workspace. Keep this code to restore the same memories on another browser or device. Anyone with it can access your demo.</p><div className="recovery-code"><code>{recoveryCode}</code><CopyButton value={recoveryCode} label="Copy recovery code" /></div><small>Shown once. It is not stored in browser local storage or sent to Walrus.</small></div><button className="button secondary" onClick={() => setRecoveryCode("")}>I've saved my code</button></section>}
+        {!services.memoryConfigured || !services.chatConfigured ? <div className="setup-banner"><span className="setup-icon"><Settings2 size={19} /></span><div><strong>One more step to connect Vita</strong><p>{!services.chatConfigured && "Gemini needs its server API key. "}{!services.memoryConfigured && "Walrus needs your mainnet account and delegate key. "}Your account, notes, and care plan already work.</p></div><button className="text-button" onClick={() => changeTab("settings")}>Setup details <ArrowRight size={15} /></button></div> : null}
+        <section className="page-heading"><div><p className="eyebrow">{user.isDemo ? "CARE WITH CONTINUITY · WALRUS MEMORY DEMO" : isPatient ? "A LITTLE MORE CONTINUITY" : "CLINICAL MEMORY, WITH PROVENANCE"}</p><h1>{tab === "chat" ? `Hello, ${user.name.split(" ")[0]}.` : NAV.find(n => n.id === tab).label}</h1><p>{tab === "chat" ? "Make room for a conversation that remembers." : tab === "memory" ? "Your context, with a source and a storage receipt." : tab === "plan" ? "Keep the next step close. Pick up where you left off." : "Control your connections, memory, and care team."}</p></div>{!isPatient && !user.isDemo && <button className="button secondary" onClick={() => setShowLink(true)}><Plus size={17} />Link a patient</button>}</section>
+        {!isPatient && patients.length > 0 && <label className="patient-picker"><UsersRound size={17} /><span>Patient workspace</span><select aria-label="Patient workspace" value={selectedId} onChange={event => setSelectedId(event.target.value)} disabled={busy.chat || busy.memory}>{patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><ChevronDown size={15} /></label>}
+        {error && <Notice type="error">{error}</Notice>}{notice && <Notice>{notice}</Notice>}
+        {loading ? <div className="loading-panel"><Spinner /> Loading workspace…</div> : !patient && tab !== "settings" ? <div className="panel no-patient"><Empty icon={UsersRound} title={isPatient ? "Unable to load your workspace" : "Start with a patient connection"}>{isPatient ? "Refresh the page to try again." : "Ask a patient to share their care code, then link their workspace. Only linked patients appear here."}</Empty>{!isPatient && <button className="button primary" onClick={() => setShowLink(true)}><Plus size={17} />Link a patient</button>}</div> : <>
+          {tab === "chat" && patient && <>
+            <section className="welcome-card"><div><span className="eyebrow"><Sparkles size={13} /> MEET YOUR CARE COMPANION</span><h2>A familiar place<br />to talk things through.</h2><p>Prepare for appointments, find saved context, and keep the details that matter close.</p><a className="welcome-cta" href="#chat-input" onClick={() => document.getElementById("chat-input")?.focus()}>Let’s talk <ArrowRight size={17} /></a></div><img src={clinicianImage} alt="Vita, an illustrated walrus care companion" /><div className="welcome-mini"><ShieldCheck size={16} /><span>Memory you can review.</span></div></section>
+            <div className="chat-grid"><section className="panel chat-panel" aria-label="Chat with Vita">
+              <div className="panel-heading"><div className="title-with-icon"><VitaAvatar /><div><h2>Chat with Vita</h2><p>Your walrus care companion · AI, not a doctor</p></div></div><span className={services.chatConfigured ? "connection-tag" : "connection-tag pending"}><i />{services.chatConfigured ? "Gemini configured" : "Setup needed"}</span></div>
+              <div className="conversation-toolbar"><span><Database size={13} />Walrus memory, with receipts</span><button className="text-button" onClick={newConversation} disabled={busy.chat || busy.newConversation || !workspace.messages.length}>{busy.newConversation ? <Spinner /> : <Plus size={14} />}New conversation</button></div>
+              {!services.chatConfigured && <div className="chat-setup"><strong>Vita needs its Gemini key before it can reply.</strong><p>Get a key from <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noreferrer">Google AI Studio</a>, add it as <code>GEMINI_API_KEY</code> in the server's <code>.env</code>, then restart the server. Your Walrus account ID is a different setting.</p><button className="text-button" onClick={refreshConnections} disabled={busy.refreshConnections}><RefreshCw size={13} />Refresh connection status</button></div>}
+              <div className="conversation" role="log" aria-live="polite" aria-label="Conversation messages">
+                {workspace.messages.length === 0 ? <div className="chat-empty"><VitaAvatar large /><span className="intro-label">A welcome from Vita · not an AI reply</span><h3>Hi, I'm Vita. I'm here to listen.</h3><p>{isPatient ? "What would you like me to call you, and what brings you here today? We can take it one step at a time." : "Which fictional patient are we discussing, and what would you like help preparing? We can take it one step at a time."}</p><div className="suggestions">{["You can call me Ada. I'm a little nervous about my next appointment.", "What do you remember about my care preferences?", "Help me explain a concern to my care team"].map(text => <button key={text} onClick={() => { setChatDraft(text); document.getElementById("chat-input")?.focus(); }}>{text}<ArrowRight size={14} /></button>)}</div></div> : workspace.messages.map(message => <article className={"chat-message " + message.role} key={message.id}>
+                  <div className="message-byline">{message.role === "assistant" ? <><VitaAvatar /> Vita</> : <><Avatar user={user} small />You</>}<time>{date(message.createdAt)}</time></div>
+                  <div className="message-text">{message.text}</div>
+                  {message.role === "assistant" && <MemoryTrace trace={message.memoryTrace} />}
+                  {message.sources?.length > 0 && <details className="message-sources"><summary><BookIcon />{message.sources.length} retrieved memory source{message.sources.length === 1 ? "" : "s"}</summary><p>Retrieved from Walrus and supplied as context. Retrieval alone does not mean every source was used; citation numbers in the reply identify cited sources.</p>{message.sources.map((source, index) => <div key={source.blobId + "-" + index}><strong>[{index + 1}] Saved context</strong><p>{source.text}</p><code>{source.blobId}</code></div>)}</details>}
+                  {message.role === "user" && <button className="text-button save-from-chat" onClick={() => { setMemoryDraft(message.text); changeTab("memory"); }}>Remember this <ArrowRight size={12} /></button>}
+                </article>)}
+                {busy.chat && <div className="thinking" role="status"><VitaAvatar /><Spinner />Vita is listening and checking saved context…</div>}<div ref={chatEnd} />
+              </div>
+              <form className="chat-composer" onSubmit={sendChat}><label className="sr-only" htmlFor="chat-input">Message Vita</label><textarea id="chat-input" value={chatDraft} onChange={e => setChatDraft(e.target.value)} placeholder="Tell Vita what's on your mind…" maxLength={4000} rows={2} disabled={busy.chat || busy.newConversation} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form.requestSubmit(); } }} /><button className="send-button" aria-label="Send message" disabled={!chatDraft.trim() || busy.chat || busy.newConversation || !services.chatConfigured}>{busy.chat ? <Spinner /> : <Send size={19} />}</button></form><p className="composer-footnote"><LockKeyhole size={12} /> Chat stays in the app. Only your reviewed saves become Walrus memories.</p>
+            </section><aside className="context-column"><div className="panel context-card"><div className="context-icon"><Database size={20} /></div><p className="eyebrow">SEE MEMORY MAKE A DIFFERENCE</p><h3>{stored === 0 ? "Your memory starts here." : stored + " confirmed " + (stored === 1 ? "memory." : "memories.")}</h3><p>Chat history and Walrus memory are different. Try a fresh conversation to see what survives.</p><ol className="memory-steps"><li>Share a fictional name or care preference.</li><li>Select <strong>Remember this</strong>, review, consent, and save.</li><li>Wait for a confirmed blob ID.</li><li>Start a <strong>New conversation</strong> and ask what Vita remembers.</li></ol><div className="mini-stat"><span>Memory consent</span><strong>{patient.memoryConsent ? "Enabled" : "Off"}</strong></div><div className="mini-stat"><span>Confirmed blobs · this patient</span><strong>{stored}</strong></div><button className="button secondary full" onClick={() => changeTab("memory")}>Open patient memory <ArrowRight size={16} /></button></div><div className="care-tip"><HeartPulse size={19} /><h3>Warm support. Honest limits.</h3><p>Vita helps you feel heard and prepare for care. It cannot diagnose, prescribe, or replace a qualified clinician.</p></div><div className="urgent-note">If you may be experiencing a medical emergency, contact local emergency services or seek urgent care.</div></aside></div>
+          </>}
+          {tab === "memory" && patient && <><div className="memory-overview"><div><span className="eyebrow">VERIFIABLE CONTINUITY</span><h2>Remember what matters.</h2><p>{stored} confirmed unique blob{stored === 1 ? "" : "s"} tracked for this patient in this app.</p><span className="soft-pill"><Database size={13} />Walrus mainnet · {services.memoryConfigured ? "Configured" : "Not connected"}</span></div><img src={memoryImage} alt="Abstract translucent layers representing connected memories" /></div><div className="memory-grid"><section className="panel pad"><div className="section-title"><h2>Review a new memory</h2><span className="soft-pill">{user.isDemo ? "Fictional demo · self-reported" : isPatient ? "Patient-reported" : "Clinician-confirmed"}</span></div><p className="muted small-text">{user.isDemo || isPatient ? "Review and edit the detail you want to bring into future conversations. Saving does not verify a medical fact." : "Confirm only information you have reviewed. Your save records it as clinician-confirmed."}</p>{!patient.memoryConsent && <Notice>Memory saves need your explicit consent. The Walrus relayer processes text before encryption; recalled text goes to Gemini during chat. {canConsent && <button className="inline-link" disabled={busy.consent} onClick={() => perform("consent", async () => { const data = await api(`${base}/consent`, { method: "PATCH", body: { enabled: true } }); updatePatient(data.patient); })}>Allow reviewed memory saves</button>}</Notice>}<form className="form-stack" onSubmit={saveMemory}><label>Memory to save<textarea aria-label="Memory to save" rows={5} maxLength={4000} required value={memoryDraft} onChange={e => setMemoryDraft(e.target.value)} placeholder="e.g. I prefer short, plain-language appointment summaries." /></label><small>Walrus’s relayer receives this text before encrypting it. Save fictional data only during this pilot.</small><button className="button primary" disabled={!memoryDraft.trim() || !patient.memoryConsent || !services.memoryConfigured || busy.memory}>{busy.memory ? <Spinner /> : <ShieldCheck size={17} />}{isPatient || user.isDemo ? "Save reviewed memory" : "Confirm & save memory"}</button></form></section><section className="panel pad"><h2>Recall from Walrus</h2><p className="muted small-text">Search the patient’s memory namespace. The returned context comes from Walrus Memory.</p><form className="search-form" onSubmit={e => { e.preventDefault(); perform("recall", async () => { const id = selectedId; const data = await api(`${base}/recall`, { method: "POST", body: { query: recallQuery } }); if (scope.current === id) setRecallResults(data.memories); }); }}><label className="sr-only" htmlFor="recall-query">Search memories</label><input id="recall-query" maxLength={1000} required value={recallQuery} onChange={e => setRecallQuery(e.target.value)} placeholder="What are my care preferences?" /><button className="button secondary" disabled={busy.recall || !services.memoryConfigured}>{busy.recall ? <Spinner /> : <Search size={16} />}Search</button></form>{recallResults === null ? <Empty icon={Search} title="Find a familiar detail">Ask a question to retrieve relevant stored context.</Empty> : recallResults.length === 0 ? <Empty title="No matching memories">Try another question or save your first memory.</Empty> : <div className="recall-results">{recallResults.map((m, i) => <article key={`${m.blobId}-${i}`}><p>{m.text}</p><code>{m.blobId}</code></article>)}</div>}</section></div><section className="panel pad receipts-panel"><div className="section-title"><h2>Memory & storage receipts</h2><span className="muted small-text">A blob ID is not a transaction hash.</span></div>{workspace.memories.length === 0 ? <Empty icon={History} title="No memories saved yet">Your reviewed memories and their storage status will appear here.</Empty> : <div className="memory-list">{workspace.memories.map(m => <article className="memory-record" key={m.id}><div className="record-top"><span className={`status-pill ${m.status}`}>{m.status === "stored" ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}{m.status === "stored" ? "Stored on Walrus" : m.status === "processing" ? "Awaiting confirmation" : m.status === "unknown" ? "Submission unconfirmed" : "Storage failed"}</span><time>{date(m.createdAt)}</time></div><p>{m.text}</p><span className="provenance"><ShieldCheck size={13} />{m.provenance === "clinician-confirmed" ? "Clinician-confirmed" : m.provenance?.startsWith("demo-") ? "Fictional demo · self-reported" : "Patient-reported"}</span>{m.error && <Notice type="error">{m.error}</Notice>}{m.jobId && <div className="receipt-line"><span>Job ID</span><code>{m.jobId}</code></div>}{m.blobId && <div className="receipt-line"><span>Blob ID</span><code>{m.blobId}</code><CopyButton value={m.blobId} label="Copy blob ID" /></div>}{m.status === "stored" && m.blobId && <a className="text-button blob-link" href={blobUrl(m.blobId)} target="_blank" rel="noreferrer">View encrypted blob on mainnet <ArrowRight size={12} /></a>}{m.status === "processing" && <button className="text-button" disabled={busy[m.id]} onClick={() => perform(m.id, async () => { const data = await api(`${base}/memories/${m.id}/status`); updateMemory(data.memory); })}><RefreshCw size={14} />Refresh receipt</button>}</article>)}</div>}</section></>}
+          {tab === "plan" && patient && <div className="plan-grid"><section className="panel pad"><div className="section-title"><h2>Care notes</h2><span className="soft-pill"><UsersRound size={13} />Shared care workspace</span></div><p className="muted small-text">Notes are saved in this app and visible to the patient and linked clinicians. They are not automatically uploaded to Walrus.</p><form className="form-stack" onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const text = new FormData(form).get("note"); perform("note", async () => { const id = selectedId; const data = await api(`${base}/notes`, { method: "POST", body: { text } }); if (scope.current === id) setWorkspace(w => ({ ...w, notes: [data.note, ...w.notes] })); form.reset(); setNotice("Care note saved."); }); }}><label>New care note<textarea name="note" rows={4} maxLength={6000} required placeholder="A question, a visit summary, or something to discuss…" /></label><button className="button primary" disabled={busy.note}>{busy.note ? <Spinner /> : <Plus size={17} />}Save note</button></form><div className="note-list">{workspace.notes.length === 0 ? <Empty icon={ClipboardList} title="A little space to prepare">Your saved care notes will appear here.</Empty> : workspace.notes.map(note => <article key={note.id}><p>{note.text}</p><span>{note.authorName} · {date(note.createdAt)}</span></article>)}</div></section><section className="panel pad"><div className="section-title"><h2>Care plan checklist</h2><span className="soft-pill">{completed}/{workspace.tasks.length} done</span></div><p className="muted small-text">Keep track of practical next steps for your care.</p><form className="search-form" onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const title = new FormData(form).get("task"); perform("task", async () => { const id = selectedId; const data = await api(`${base}/tasks`, { method: "POST", body: { title } }); if (scope.current === id) setWorkspace(w => ({ ...w, tasks: [data.task, ...w.tasks] })); form.reset(); }); }}><label className="sr-only" htmlFor="new-task">New care task</label><input id="new-task" name="task" maxLength={200} required placeholder="e.g. Prepare questions for my visit" /><button className="button secondary" disabled={busy.task}>{busy.task ? <Spinner /> : <Plus size={16} />}Add</button></form><div className="task-list">{workspace.tasks.length === 0 ? <Empty icon={CheckCircle2} title="Small steps, all in one place">Add a task and mark it complete when you’re done.</Empty> : workspace.tasks.map(task => <label className={`task ${task.completed ? "done" : ""}`} key={task.id}><input type="checkbox" checked={task.completed} disabled={busy[task.id]} onChange={e => { const checked = e.target.checked; perform(task.id, async () => { const id = selectedId; const data = await api(`${base}/tasks/${task.id}`, { method: "PATCH", body: { completed: checked } }); if (scope.current === id) setWorkspace(w => ({ ...w, tasks: w.tasks.map(t => t.id === task.id ? data.task : t) })); }); }} /><span>{task.title}</span>{busy[task.id] && <Spinner />}</label>)}</div></section></div>}
+          {tab === "settings" && <div className="settings-grid"><section className="panel pad"><div className="title-with-icon"><span className="small-icon"><LockKeyhole size={21} /></span><div><h2>Memory & privacy</h2><p className="muted small-text">You decide what stays connected.</p></div></div>{patient ? <><div className="consent-row"><div><strong>Allow Walrus Memory saves</strong><p>Enable explicit saves for this patient’s care workspace.</p></div><label className="switch"><input type="checkbox" aria-label="Allow Walrus Memory saves" checked={patient.memoryConsent} disabled={!canConsent || busy.consent} onChange={e => { const enabled = e.target.checked; perform("consent", async () => { const data = await api(`${base}/consent`, { method: "PATCH", body: { enabled } }); updatePatient(data.patient); }); }} /><span /></label></div><p className="muted small-text">Saved memories are encrypted through the Walrus relayer, which processes plaintext during storage. Relevant recalled text is sent to Gemini when you chat. Turning this off stops new memory saves; it does not delete existing records or blobs.</p>{!canConsent && <Notice>Only the patient can change their consent.</Notice>}</> : <p className="muted">Link a patient to view their consent settings.</p>}<div className="account-details"><strong>{user.name}</strong><span>{user.username ? "@" + user.username + " · unverified demo label" : user.email}</span><span>{user.isDemo ? "Fictional-data demo account" : isPatient ? "Patient account" : "Invited clinician account"}</span></div></section>
+            <section className="panel pad"><h2>Connected services</h2><div className="service-row"><span className="small-icon"><Sparkles size={20} /></span><div><strong>Gemini</strong><p>{services.model || "gemini-3.1-flash-lite"}</p></div><span className={`soft-pill ${services.chatConfigured ? "" : "amber"}`}>{services.chatConfigured ? "Key configured" : "Needs API key"}</span></div><div className="service-row"><span className="small-icon"><Database size={20} /></span><div><strong>Walrus Memory</strong><p>Mainnet relayer</p></div><span className={`soft-pill ${verification?.connected ? "" : "amber"}`}>{verification?.connected ? "Connection verified" : services.memoryConfigured ? "Needs verification" : "Needs account"}</span></div><button className="button secondary" disabled={!services.memoryConfigured || busy.verify} onClick={() => perform("verify", async () => { const data = await api("/services/verify", { method: "POST", body: {} }); setVerification(data.verification); setNotice("Walrus authenticated connection verified. No blob was written by this check."); })}>{busy.verify ? <Spinner /> : <RefreshCw size={16} />}Test Walrus connection</button><button className="text-button refresh-connections" onClick={refreshConnections} disabled={busy.refreshConnections}><RefreshCw size={14} />Refresh connection status</button>{services.accountId && <div className="receipt-line account-id"><span>Account ID</span><code>{services.accountId}</code><CopyButton value={services.accountId} /></div>}<details className="setup-details" open={!services.memoryConfigured || !services.chatConfigured}><summary>Server setup instructions</summary><p>In the existing server <code>.env</code> file, fill missing values locally, then restart the server. Do not overwrite working Walrus credentials:</p><ul><li><code>GEMINI_API_KEY</code> from <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noreferrer">Google AI Studio</a></li><li><code>MEMWAL_ACCOUNT_ID</code> and <code>MEMWAL_KEY</code> from your own <a href="https://memory.walrus.xyz" target="_blank" rel="noreferrer">Walrus Memory account</a></li><li><code>CLINICIAN_INVITE_CODE</code> is only for advanced email-based clinician accounts. The clinician demo needs no code.</li></ul><p>Keep private keys on the server. Do not enter them in chat. A configured key is not proof of a successful live call.</p></details></section>
+            {isPatient && patient && <section className="panel pad care-team-panel"><h2>Your care team</h2><p className="muted small-text">Share your care code only with an invited clinician you want to give access to your shared notes, tasks, and memories. Your private chat stays separate.</p><div className="care-code"><code>{patient.careCode}</code><CopyButton value={patient.careCode} label="Copy care code" /></div><button className="text-button" disabled={busy.rotate} onClick={() => perform("rotate", async () => { const data = await api(`${base}/care-code`, { method: "POST", body: {} }); updatePatient(data.patient); setNotice("New care code created. Existing care-team access is unchanged."); })}><RefreshCw size={14} />Generate a new care code</button><div className="care-team-list">{workspace.careTeam?.length ? workspace.careTeam.map(member => <div key={member.id}><span className="avatar small">{initials(member.name)}</span><strong>{member.name}</strong><button className="text-button danger-text" disabled={busy[member.id]} onClick={() => perform(member.id, async () => { const data = await api(`${base}/care-team/${member.id}`, { method: "DELETE", body: {} }); updatePatient(data.patient); setWorkspace(w => ({ ...w, careTeam: w.careTeam.filter(m => m.id !== member.id) })); setNotice("Clinician access removed and care code changed."); })}><Trash2 size={14} />Remove access</button></div>) : <p className="muted small-text">No clinicians are linked yet.</p>}</div></section>}
+          </div>}
+        </>}
+        <footer className="page-footer"><span><ShieldCheck size={13} />Patient-led memory. Human-led care.</span><small>Fictional data only during this pilot. <a href="https://unavatar.io" target="_blank" rel="noreferrer">Avatars by Unavatar</a>.</small></footer>
+      </div>
+    </main>
+    <nav className="mobile-nav" aria-label="Mobile navigation">{NAV.map(({ id, label, icon: Icon }) => <button key={id} aria-label={label} className={tab === id ? "active" : ""} onClick={() => changeTab(id)}><Icon size={20} /><span>{id === "chat" ? "Chat" : id === "memory" ? "Memory" : id === "plan" ? "Care plan" : "Settings"}</span></button>)}</nav>
+    {showLink && <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="link-title"><div className="section-title"><h2 id="link-title">Link a patient</h2><button className="icon-button" aria-label="Close dialog" onClick={() => setShowLink(false)}><X size={20} /></button></div><p className="muted small-text">Ask the patient for their care code from Settings. This grants access to their shared care workspace.</p><form className="form-stack" onSubmit={e => { e.preventDefault(); const code = new FormData(e.currentTarget).get("code"); perform("link", async () => { const data = await api("/patients/link", { method: "POST", body: { code } }); setPatients(p => p.some(item => item.id === data.patient.id) ? p : [...p, data.patient]); setSelectedId(data.patient.id); setShowLink(false); setTab("chat"); }); }}><label>Patient care code<input name="code" autoFocus required maxLength={40} autoComplete="off" /></label>{error && <Notice type="error">{error}</Notice>}<button className="button primary" disabled={busy.link}>{busy.link ? <Spinner /> : <UsersRound size={17} />}Link patient workspace</button></form></section></div>}
+  </div>;
+}
+function BookIcon() { return <History size={13} aria-hidden="true" />; }
+createRoot(document.getElementById("root")).render(<StrictMode><App /></StrictMode>);
