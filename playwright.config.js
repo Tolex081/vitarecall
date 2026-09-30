@@ -5,7 +5,8 @@ const systemChrome = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe
 
 export default defineConfig({
   testDir: "./tests",
-  timeout: 30000,
+  timeout: 60000,
+  expect: { timeout: 10000 },
   workers: 1,
   reporter: "list",
   use: {
@@ -20,6 +21,6 @@ export default defineConfig({
     command: "node tests/e2e-server.js",
     url: "http://127.0.0.1:3187/api/health",
     reuseExistingServer: false,
-    timeout: 15000,
+    timeout: 30000,
   },
 });

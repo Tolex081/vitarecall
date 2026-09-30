@@ -1,12 +1,12 @@
 # VitaRecall
 
-A patient and clinician demo with quick X/Twitter-handle profiles, care notes, chat history, and an explicit Walrus Memory save-and-recall workflow. The frontend uses React/Vite; the API uses Express and SQLite through Node's built-in `node:sqlite`. Gemini supplies chat responses. Original generated artwork lives in `src/assets/`.
+A patient and clinician demo with quick X/Twitter-handle profiles, care notes, chat history, and an explicit Walrus Memory save-and-recall workflow. The frontend uses React/Vite; the API uses Express with PostgreSQL for hosting or SQLite through Node's built-in `node:sqlite` for local development. Gemini supplies chat responses. Original generated artwork lives in `src/assets/`.
 
 This is a working hackathon implementation for **synthetic patient data**. Live Gemini responses and mainnet Walrus writes require your own provider credentials and end-to-end verification. Configuring the code does not itself create a blob or prove hackathon eligibility.
 
-## Testing and split deployment
+## Testing and free deployment
 
-Start with the [five fictional patient scripts](docs/patient-testing/README.md) for structured multi-day memory tests. The [deployment guide](docs/DEPLOYMENT.md) explains the selected architecture: Vercel serves the frontend and proxies `/api` to a separate persistent Node backend. Do not import this repository into Vercel expecting local SQLite to become a durable hosted database. The dedicated `build:vercel` requires `VITA_API_ORIGIN`; provider keys stay on the backend.
+Start with the [five fictional patient scripts](docs/patient-testing/README.md) for structured multi-day memory tests. The [deployment guide](docs/DEPLOYMENT.md) explains the selected architecture: **Vercel Hobby hosts the frontend and API; Supabase Free stores app data in PostgreSQL; Walrus mainnet stores and recalls long-term memories**. Add the private `DATABASE_URL`, apply `npm run db:migrate`, and configure all provider keys as server-only Vercel variables. No separate backend host or `VITA_API_ORIGIN` is needed. Free tiers have usage and availability limits; a successful build is not proof of a working deployment.
 
 ## Local setup
 
@@ -59,15 +59,23 @@ Turning consent off stops future memory saves. It does **not** erase already sto
 
 ```sh
 npm test
+npm run test:postgres
+npm run test:deployment
 npm run test:e2e
 npm run build
 ```
 
 Automated checks can exercise application behavior with test providers. They do not prove that your real API keys, account funding, model access, or mainnet writes work. Verify those with a synthetic patient after configuration.
 
-The browser checks use an installed Google Chrome (`channel: "chrome"`) and a separate temporary database. If Chrome is unavailable, install Chrome or change the Playwright channel to an installed browser. No external provider calls are made by these checks.
+The browser checks use an installed Google Chrome (`channel: "chrome"`) and a separate temporary database. If Chrome is unavailable, install Chrome or change the Playwright channel to an installed browser. Optional remote fonts are stubbed so network availability does not affect functional tests. No external provider calls are made by these checks. `test:postgres` runs the API/auth/concurrency suites against a local PostgreSQL engine (PGlite), without Supabase credentials; it does not prove cloud connectivity.
 
-## Deploy
+## Deploy with Vercel and Supabase
+
+Follow [the step-by-step free deployment guide](docs/DEPLOYMENT.md) to create the Supabase project, configure its transaction-pooler connection, apply the private-schema migration, and import the repository into Vercel. The checked-in configuration builds Vite to `dist` and routes `/api/*` to the Node function at `api/index.js`. Vercel refuses the SQLite fallback; it requires `DATABASE_URL`.
+
+The database migration creates the schema, not an automatic copy of localhost accounts. Create the tester profiles on the deployed URL, or arrange a separate private data migration that preserves patient IDs and Walrus namespace mappings. Never upload local databases or recovery codes to GitHub.
+
+## Optional persistent Node deployment
 
 Use a host that runs a persistent Node process or container. Build and start with:
 
@@ -79,7 +87,7 @@ npm start
 
 The API serves the built frontend and `/api` on `PORT` (default `3001`). Set `NODE_ENV=production`, `APP_ORIGIN` to the exact public HTTPS origin, such as `https://your-app.example`, and `COOKIE_SECURE=true`. Supply the remaining secrets through the host. This repository does not deploy automatically.
 
-SQLite lives under `DATA_DIR` (default `./data`). Mount persistent storage there, run **one Node instance**, and back up the database. An ephemeral filesystem loses accounts, sessions, notes, and receipts when replaced. This deployment is unsuitable for Vercel-style ephemeral serverless functions as configured; it needs a persistent server and volume, or a future database/session redesign.
+When `DATABASE_URL` is empty, SQLite lives under `DATA_DIR` (default `./data`). Mount persistent storage there, run **one Node instance**, and back up the database. An ephemeral filesystem loses accounts, sessions, notes, and receipts when replaced. For Vercel, use the PostgreSQL setup above instead. Setting `DATABASE_URL` also lets a persistent Node process use PostgreSQL.
 
 The included Dockerfile builds the frontend and runs the API as a non-root user. For a local container smoke test:
 

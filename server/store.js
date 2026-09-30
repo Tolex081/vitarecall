@@ -68,21 +68,58 @@ export function createStore(filename) {
       id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, patient_id TEXT,
       action TEXT NOT NULL, created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS rate_limits (
+      key TEXT PRIMARY KEY, count INTEGER NOT NULL, until INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS operation_locks (
+      key TEXT PRIMARY KEY, token TEXT NOT NULL, expires_at INTEGER NOT NULL
+    );
   `);
+  // Queue the entire async transaction, not only individual statements.
+  // Concurrent requests must never accidentally join another request's transaction.
+  let tail = Promise.resolve();
+  let closed = false;
+  const enqueue = (fn) => {
+    const result = tail.then(() => {
+      if (closed) throw new Error("The database is closed.");
+      return fn();
+    });
+    tail = result.catch(() => {});
+    return result;
+  };
+  function methods(dispatch) {
+    const api = {
+      get: (sql, ...args) => dispatch(() => db.prepare(sql).get(...args)),
+      all: (sql, ...args) => dispatch(() => db.prepare(sql).all(...args)),
+      run: (sql, ...args) => dispatch(() => ({ changes: Number(db.prepare(sql).run(...args).changes) })),
+      audit: (userId, patientId, action) => api.run(
+        "INSERT INTO audit_events (user_id,patient_id,action,created_at) VALUES (?,?,?,?)",
+        userId || null, patientId || null, action, new Date().toISOString(),
+      ),
+    };
+    return api;
+  }
   return {
-    db,
-    get: (sql, ...args) => db.prepare(sql).get(...args),
-    all: (sql, ...args) => db.prepare(sql).all(...args),
-    run: (sql, ...args) => db.prepare(sql).run(...args),
-    transaction(fn) {
+    dialect: "sqlite",
+    ...methods(enqueue),
+    transaction: (fn) => enqueue(async () => {
       db.exec("BEGIN IMMEDIATE");
-      try { const value = fn(); db.exec("COMMIT"); return value; }
-      catch (error) { db.exec("ROLLBACK"); throw error; }
-    },
-    audit(userId, patientId, action) {
-      db.prepare("INSERT INTO audit_events (user_id,patient_id,action,created_at) VALUES (?,?,?,?)")
-        .run(userId || null, patientId || null, action, new Date().toISOString());
-    },
-    close: () => db.close(),
+      let active = true;
+      const tx = methods(async (operation) => {
+        if (!active) throw new Error("The transaction has finished.");
+        return operation();
+      });
+      try {
+        const result = await fn(tx);
+        db.exec("COMMIT");
+        return result;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      } finally {
+        active = false;
+      }
+    }),
+    close: () => enqueue(() => { closed = true; db.close(); }),
   };
 }

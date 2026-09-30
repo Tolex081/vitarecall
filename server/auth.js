@@ -28,21 +28,25 @@ export function createSessions(store, config) {
   function writeCookie(res, token, maxAge) {
     res.cookie(cookieName, token, { httpOnly: true, sameSite: "strict", secure: config.secureCookies, path: "/", maxAge });
   }
-  function create(req, res, userId = null) {
-    if (req.session) store.run("DELETE FROM sessions WHERE token_hash=?", req.session.token_hash);
+  async function create(req, res, userId = null) {
+    const previousTokenHash = req.session?.token_hash;
     const token = randomBytes(32).toString("hex");
     const ttl = userId ? 7 * 86400000 : 3600000;
-    req.session = { token_hash: hash(token), user_id: userId, csrf_token: randomBytes(32).toString("hex"), expires_at: Date.now() + ttl };
-    store.run("INSERT INTO sessions VALUES (?,?,?,?)", ...Object.values(req.session));
-    req.user = userId ? readUser(userId) : null;
+    const session = { token_hash: hash(token), user_id: userId, csrf_token: randomBytes(32).toString("hex"), expires_at: Date.now() + ttl };
+    await store.transaction(async tx => {
+      if (previousTokenHash) await tx.run("DELETE FROM sessions WHERE token_hash=?", previousTokenHash);
+      await tx.run("INSERT INTO sessions VALUES (?,?,?,?)", ...Object.values(session));
+    });
+    req.session = session;
+    req.user = userId ? await readUser(userId) : null;
     if (req.user) req.user.isDemo = Boolean(req.user.username);
     writeCookie(res, token, ttl);
   }
-  function load(req, _res, next) {
+  async function load(req, _res, next) {
     const match = (req.headers.cookie || "").split(";").map(s => s.trim()).find(s => s.startsWith(`${cookieName}=`));
     const token = match?.slice(cookieName.length + 1);
-    req.session = token ? store.get("SELECT * FROM sessions WHERE token_hash=? AND expires_at>?", hash(token), Date.now()) : null;
-    req.user = req.session?.user_id ? readUser(req.session.user_id) : null;
+    req.session = token ? await store.get("SELECT * FROM sessions WHERE token_hash=? AND expires_at>?", hash(token), Date.now()) : null;
+    req.user = req.session?.user_id ? await readUser(req.session.user_id) : null;
     if (req.user) req.user.isDemo = Boolean(req.user.username);
     next();
   }

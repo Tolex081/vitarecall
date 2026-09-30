@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createApp } from './app.js';
-import { createStore } from './store.js';
+import { createTestStore } from './test-store.js';
 
 const origin = 'http://localhost:5173';
 async function harness(t) {
-  const store = createStore(':memory:');
+  const store = await createTestStore(':memory:');
   const calls = { chat: [], recall: [], submit: [] };
   const memory = {
     configured: true, accountId: `0x${'a'.repeat(64)}`,
@@ -19,7 +19,7 @@ async function harness(t) {
   const config = { production: false, secureCookies: false, appOrigin: origin, clinicianInviteCode: 'advanced-invite' };
   const app = createApp({ config, store, memory, chat });
   const server = await new Promise(resolve => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)); });
-  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close(); });
+  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await store.close(); });
   const base = `http://127.0.0.1:${server.address().port}`;
   function client() {
     const state = { cookie: '', csrf: '' };
@@ -62,7 +62,7 @@ test('a demo handle creates an isolated unverified workspace and a once-only has
   assert.match(created.headers.get('set-cookie'), /SameSite=Strict/);
   assert.match(created.headers.get('set-cookie'), /Max-Age=604800/);
   assert.match(created.body.recoveryCode, /^[A-Za-z0-9_-]{43}$/);
-  const stored = app.store.get('SELECT * FROM demo_profiles WHERE user_id=?', user.id);
+  const stored = await app.store.get('SELECT * FROM demo_profiles WHERE user_id=?', user.id);
   assert.notEqual(stored.recovery_hash, created.body.recoveryCode);
   assert.equal('recoveryCode' in stored, false);
   const firstPatient = await first.patient();
@@ -108,7 +108,7 @@ test('invalid demo handles and roles are rejected without creating an account', 
     assert.equal(result.status, 400, String(username));
   }
   assert.equal((await client.request('POST', '/api/auth/demo', { username: 'demo', role: 'admin' })).status, 400);
-  assert.equal(app.store.get('SELECT COUNT(*) AS count FROM users').count, 0);
+  assert.equal(Number((await app.store.get('SELECT COUNT(*) AS count FROM users')).count), 0);
 });
 
 test('demo clinicians need no invite but cannot assert verified provenance or enter non-demo workspaces', async t => {
@@ -163,7 +163,7 @@ test('fresh conversations persist a transcript boundary while recalling actual p
   const workspace = (await client.request('GET', patientUrl(patient, 'workspace'))).body;
   assert.equal(workspace.messages.length, 4);
   assert.equal(workspace.messages[3].memoryTrace.historyUsed, true);
-  assert.equal(app.store.get('SELECT COUNT(*) AS count FROM messages').count, 8, 'Fresh conversations do not erase stored transcripts.');
+  assert.equal(Number((await app.store.get('SELECT COUNT(*) AS count FROM messages')).count), 8, 'Fresh conversations do not erase stored transcripts.');
   assert.equal(app.calls.recall.length, 4);
   assert.ok(app.calls.recall.every(call => call.namespace === `vitarecall:patient:${patient.id}`));
   assert.equal(app.calls.submit.length, 0, 'Chat never automatically saves memory.');

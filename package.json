@@ -9,7 +9,10 @@
     "start": "node server/index.js",
     "build": "vite build",
     "build:vercel": "node scripts/build-vercel.mjs",
+    "db:migrate": "node scripts/migrate-postgres.mjs",
+    "db:import:sqlite": "node scripts/import-sqlite.mjs",
     "test:deployment": "node --test scripts/build-vercel.test.mjs",
+    "test:postgres": "node scripts/test-postgres.mjs",
     "preview": "vite preview",
     "test": "node --test server/*.test.js",
     "test:e2e": "npm run build && playwright test"
@@ -18,15 +21,18 @@
     "@mysten-incubation/memwal": "^0.1.8",
     "@mysten/seal": "^1.1.3",
     "@mysten/sui": "^2.16.2",
+    "@vercel/functions": "^3.9.9",
     "@vitejs/plugin-react": "latest",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
     "lucide-react": "latest",
+    "pg": "^8.23.0",
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@playwright/test": "^1.63.0",
     "concurrently": "^10.0.5"
   }

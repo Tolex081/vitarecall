@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createApp } from './app.js';
-import { createStore } from './store.js';
+import { createTestStore } from './test-store.js';
 import { createMemoryService } from './memory.js';
 
 const ORIGIN = 'http://localhost:5173';
@@ -43,7 +43,7 @@ function fakeServices() {
 async function harness(t, { filename = ':memory:', services = fakeServices() } = {}) {
   const state = { store: null, server: null, base: null, ...services };
   async function start() {
-    state.store = createStore(filename);
+    state.store = await createTestStore(filename);
     const app = createApp({ config: testConfig, store: state.store, memory: services.memory, chat: services.chat });
     state.server = await new Promise((resolve) => {
       const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
@@ -56,7 +56,7 @@ async function harness(t, { filename = ':memory:', services = fakeServices() } =
       await new Promise((resolve, reject) => state.server.close((error) => error ? reject(error) : resolve()));
       state.server = null;
     }
-    if (state.store) { state.store.close(); state.store = null; }
+    if (state.store) { await state.store.close(); state.store = null; }
   }
   state.restart = async () => { await stop(); await start(); };
   state.stop = stop;
@@ -108,6 +108,25 @@ async function patientSetup(app, name = 'Alice') {
   return { client, patient: await client.patient() };
 }
 
+// Separate Express instances deliberately share only durable database state.
+// This simulates requests reaching different serverless function instances.
+async function siblingInstance(t, app) {
+  const sibling = createApp({ config: testConfig, store: app.store, memory: app.memory, chat: app.chat });
+  const server = await new Promise(resolve => {
+    const listener = sibling.listen(0, '127.0.0.1', () => resolve(listener));
+  });
+  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
+  return { base: `http://127.0.0.1:${server.address().port}` };
+}
+
+function sameSession(app, client) {
+  const other = browser(app);
+  other.cookie = client.cookie;
+  other.csrf = client.csrf;
+  other.user = client.user;
+  return other;
+}
+
 const memoryRequest = (text = 'Patient prefers an afternoon appointment.') => ({ text, requestId: randomUUID() });
 const chatRequest = (message = 'Help prepare questions for my visit.') => ({ message, requestId: randomUUID() });
 const workspacePath = (p) => `/api/patients/${p.id}/workspace`;
@@ -143,7 +162,7 @@ test('sessions enforce HttpOnly cookies, CSRF, origin checks, rotation and logou
   assert.equal((await client.request('POST', '/api/auth/logout', {}, { headers: { 'x-csrf-token': guestCsrf } })).status, 403);
   const loginCookie = client.cookie;
   const rawToken = loginCookie.split('=')[1];
-  assert.equal(app.store.get('SELECT token_hash FROM sessions WHERE token_hash=?', rawToken), undefined);
+  assert.equal(await app.store.get('SELECT token_hash FROM sessions WHERE token_hash=?', rawToken), undefined);
   assert.equal((await client.request('POST', '/api/auth/logout', {})).status, 200);
   assert.equal(client.user, null);
   assert.equal((await client.request('GET', '/api/patients', undefined, { headers: { Cookie: loginCookie } })).status, 401);
@@ -259,7 +278,7 @@ test('memory requires consent, enforces provenance, deduplicates saves and confi
   assert.equal(pending.body.memory.blobId, null);
   app.receipts.set(saved.body.memory.jobId, Object.assign(new Error('Temporary relayer failure.'), { status: 502 }));
   assert.equal((await alice.request('GET', statusUrl)).status, 502);
-  assert.equal(app.store.get('SELECT status FROM memories WHERE id=?', saved.body.memory.id).status, 'processing');
+  assert.equal((await app.store.get('SELECT status FROM memories WHERE id=?', saved.body.memory.id)).status, 'processing');
   app.receipts.set(saved.body.memory.jobId, { status: 'stored', blobId: 'confirmed-test-blob', owner: 'test-owner' });
   const completed = await alice.request('GET', statusUrl);
   assert.equal(completed.body.memory.status, 'stored');
@@ -356,7 +375,7 @@ test('real memory adapter accepts app namespaces and requires provider job and b
   assert.equal(submission.namespace, `vitarecall:patient:${patient.id}`);
   const statusUrl = patientPath(patient, `memories/${saved.body.memory.id}/status`);
   assert.equal((await client.request('GET', statusUrl)).status, 502, 'done without a blob ID must not become stored');
-  assert.equal(app.store.get('SELECT status FROM memories WHERE id=?', saved.body.memory.id).status, 'processing');
+  assert.equal((await app.store.get('SELECT status FROM memories WHERE id=?', saved.body.memory.id)).status, 'processing');
   receipt = { status: 'done', blob_id: 'confirmed-sdk-blob', owner: 'sdk-owner' };
   assert.equal((await client.request('GET', statusUrl)).body.memory.blobId, 'confirmed-sdk-blob');
   accepted = { status: 'running' };
@@ -402,6 +421,75 @@ test('revoking a clinician rotates the care code and blocks access and relinking
   assert.equal((await clinician.request('POST', '/api/patients/link', { code: removed.body.patient.careCode })).status, 404);
 });
 
+test('a chat lease prevents overlapping chats and conversation resets across app instances', { timeout: 15_000 }, async t => {
+  const services = fakeServices(), entered = deferred(), released = deferred();
+  let modelCalls = 0;
+  services.chat.respond = async () => { modelCalls++; entered.resolve(); return released.promise; };
+  const app = await harness(t, { services });
+  const { client, patient } = await patientSetup(app);
+  const other = sameSession(await siblingInstance(t, app), client);
+  const firstPayload = chatRequest('This response is still being generated.');
+  const pending = client.request('POST', patientPath(patient, 'chat'), firstPayload);
+  try {
+    await entered.promise;
+    assert.equal((await other.request('POST', patientPath(patient, 'chat'), firstPayload)).status, 409);
+    assert.equal((await other.request('POST', patientPath(patient, 'chat'), chatRequest('Do not interleave.'))).status, 409);
+    assert.equal((await other.request('POST', patientPath(patient, 'conversation/reset'), {})).status, 409);
+  } finally { released.resolve('An injected cross-instance test response.'); }
+  const completed = await pending;
+  assert.equal(completed.status, 200, JSON.stringify(completed.body));
+  assert.equal(modelCalls, 1);
+  assert.equal((await other.request('GET', workspacePath(patient))).body.messages.length, 2);
+  assert.deepEqual((await other.request('POST', patientPath(patient, 'chat'), firstPayload)).body, completed.body);
+  assert.equal((await other.request('POST', patientPath(patient, 'conversation/reset'), {})).status, 200);
+  assert.deepEqual((await client.request('GET', workspacePath(patient))).body.messages, []);
+});
+
+test('simultaneous identical memory saves on different instances submit to the provider only once', { timeout: 15_000 }, async t => {
+  const services = fakeServices(), entered = deferred(), released = deferred();
+  let submissions = 0;
+  services.memory.submit = async () => { submissions++; entered.resolve(); await released.promise; return { jobId: 'single-cross-instance-job' }; };
+  const app = await harness(t, { services });
+  const { client, patient } = await patientSetup(app);
+  await client.request('PATCH', patientPath(patient, 'consent'), { enabled: true });
+  const other = sameSession(await siblingInstance(t, app), client);
+  const payload = memoryRequest('Fictional preference: short appointment summaries.');
+  const requests = [client, other].map(actor => actor.request('POST', patientPath(patient, 'memories'), payload));
+  try {
+    await entered.promise;
+    const duplicate = await Promise.race(requests);
+    assert.equal(duplicate.status, 200, JSON.stringify(duplicate.body));
+    assert.equal(submissions, 1);
+    assert.equal(duplicate.body.memory.status, 'unknown', 'An in-flight write must never be advertised as stored.');
+    assert.equal(duplicate.body.memory.blobId, null);
+  } finally { released.resolve(); }
+  const results = await Promise.all(requests);
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 202]);
+  assert.equal(results[0].body.memory.id, results[1].body.memory.id);
+  assert.equal(submissions, 1);
+  const workspace = await other.request('GET', workspacePath(patient));
+  assert.equal(workspace.body.memories.length, 1);
+  assert.equal(workspace.body.memories[0].jobId, 'single-cross-instance-job');
+  assert.equal(workspace.body.stats.storedBlobs, 0);
+});
+
+test('memory submission limits are shared across instances and survive app recreation', async t => {
+  const app = await harness(t);
+  const { client, patient } = await patientSetup(app);
+  await client.request('PATCH', patientPath(patient, 'consent'), { enabled: true });
+  const other = sameSession(await siblingInstance(t, app), client);
+  for (let index = 0; index < 6; index++) {
+    const result = await (index % 2 ? other : client).request('POST', patientPath(patient, 'memories'), memoryRequest(`Fictional preference ${index}.`));
+    assert.equal(result.status, 202, JSON.stringify(result.body));
+  }
+  const blocked = await other.request('POST', patientPath(patient, 'memories'), memoryRequest());
+  assert.equal(blocked.status, 429);
+  assert.ok(Number(blocked.headers.get('retry-after')) > 0);
+  const recreated = sameSession(await siblingInstance(t, app), client);
+  assert.equal((await recreated.request('POST', patientPath(patient, 'memories'), memoryRequest())).status, 429);
+  assert.equal(app.calls.submit.length, 6);
+});
+
 test('revocation while recall is pending prevents returned context from reaching chat or the revoked clinician', async (t) => {
   const services = fakeServices();
   const entered = deferred();
@@ -420,7 +508,7 @@ test('revocation while recall is pending prevents returned context from reaching
   assert.equal(result.status, 404);
   assert.equal(services.calls.chat.length, 0, 'A revoked clinician must not trigger sending recalled data to the model.');
   assert.doesNotMatch(JSON.stringify(result.body), /Private recalled/);
-  assert.equal(app.store.get('SELECT COUNT(*) AS count FROM messages').count, 0);
+  assert.equal(Number((await app.store.get('SELECT COUNT(*) AS count FROM messages')).count), 0);
 });
 
 test('accounts, notes, tasks, chat exchanges and confirmed blob receipts survive a database reopen', async (t) => {

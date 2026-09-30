@@ -1,67 +1,23 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdir, writeFile } from "node:fs/promises";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
+const serverSecrets = ["DATABASE_URL", "DATABASE_CA_CERT", "GEMINI_API_KEY", "MEMWAL_KEY", "CLINICIAN_INVITE_CODE", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY"];
 
-export function validateApiOrigin(value) {
-  const message = "Set VITA_API_ORIGIN to the public HTTPS origin of your persistent VitaRecall backend (no path, credentials, query, or fragment). See docs/DEPLOYMENT.md.";
-  if (typeof value !== "string" || !value.trim()) throw new Error(message);
-  let url;
-  try { url = new URL(value.trim()); } catch { throw new Error(message); }
-  const hostname = url.hostname.toLowerCase();
-  // Require public DNS, not local addresses or documentation placeholders.
-  const publicHostname = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}$/.test(hostname);
-  const placeholder = /(?:^|\.)(?:localhost|local|internal|test|invalid|example)$/.test(hostname)
-    || /(?:^|\.)example\.(?:com|org|net)$/.test(hostname);
-  if (url.protocol !== "https:" || !publicHostname || placeholder || url.username || url.password
-      || url.pathname !== "/" || url.search || url.hash) throw new Error(message);
-  return url.origin;
-}
-
-export function createDeploymentConfig(apiOrigin) {
-  const origin = validateApiOrigin(apiOrigin);
-  return {
-    version: 3,
-    routes: [
-      {
-        src: "/(.*)",
-        headers: {
-          "X-Content-Type-Options": "nosniff",
-          "X-Frame-Options": "DENY",
-          "Referrer-Policy": "same-origin",
-          "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-          "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-          "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-        },
-        continue: true,
-      },
-      {
-        // Keep /api: the Node app mounts routes under this prefix.
-        // External rewrite, not browser redirect; no API secret is embedded.
-        src: "^(/api(?:/.*)?)$",
-        dest: `${origin}$1`,
-        headers: { "Cache-Control": "no-store" },
-      },
-      { handle: "filesystem" },
-      { src: "/(.*)", dest: "/index.html", methods: ["GET", "HEAD"] },
-    ],
-  };
+export function assertNoClientSecrets(env) {
+  for (const name of serverSecrets) {
+    if (env[`VITE_${name}`]) throw new Error(`Remove VITE_${name}. Credentials belong only in server environment variables, never browser-exposed VITE_ variables.`);
+  }
 }
 
 export async function buildVercel(env = process.env) {
-  // A frontend without a backend must not pass as a working deployment.
-  const config = createDeploymentConfig(env.VITA_API_ORIGIN);
-  for (const name of ["VITE_GEMINI_API_KEY", "VITE_MEMWAL_KEY"]) {
-    if (env[name]) throw new Error(`Remove ${name}. Provider credentials belong only on the persistent backend, never in browser-exposed VITE_ variables.`);
-  }
-  const output = path.join(projectRoot, ".vercel", "output");
-  const staticDir = path.join(output, "static");
-  const { build } = await import("vite");
-  await build({ root: projectRoot, build: { outDir: staticDir, emptyOutDir: true } });
-  await mkdir(output, { recursive: true });
-  await writeFile(path.join(output, "config.json"), `${JSON.stringify(config, null, 2)}\n`);
-  console.log("Vercel frontend built with a same-origin /api proxy. Deploy the persistent backend separately.");
+  const { build, loadEnv } = await import("vite");
+  // Include .env.production/.env.local in the check, not just shell variables.
+  assertNoClientSecrets({ ...loadEnv("production", projectRoot, ""), ...env });
+  // Vercel compiles api/index.js as a Node function. Only frontend assets belong
+  // in dist; no manual Build Output API bundle and no external backend proxy.
+  await build({ root: projectRoot, build: { outDir: "dist", emptyOutDir: true } });
+  console.log("Vercel frontend built. The /api function uses server-side DATABASE_URL; run database migrations separately before serving traffic.");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

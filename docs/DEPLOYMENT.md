@@ -1,85 +1,105 @@
-# Deploy VitaRecall for the five-tester pilot
+# Deploy the free VitaRecall pilot
 
-Use **Vercel for the frontend** and **one persistent Node backend with a disk**. This repository does not provision hosting or purchase a plan. Use fictional patient information only: this is an AI-support demo, not a medical service.
+The selected setup is **Vercel Hobby for the frontend and API, plus Supabase Free for PostgreSQL**. Walrus Memory remains the long-term memory engine; Gemini generates replies. This replaces the earlier separate paid/persistent-backend plan. There is no `VITA_API_ORIGIN` requirement now.
 
-## Why the backend stays separate
+Use fictional patient information only. This is a hackathon support demo, not a medical service. These files prepare deployment; they do not create accounts, purchase services, migrate a remote database, or claim that a deployment has passed the checks below.
 
-SQLite stores accounts, recovery-code hashes, sessions, consent, patient IDs, care permissions, chat history, and Walrus receipts. Patient IDs determine each patient's Walrus namespace. Mainnet blobs persist independently, but losing this database loses the app's identity-to-memory mapping. Walrus does not replace authentication or that mapping.
+## 1. Create the free Supabase project
 
-Do not run this SQLite backend on a Vercel Function or put the database in `/tmp`. Vercel documents that function instances do not share a durable local filesystem. [Vercel's SQLite guidance](https://vercel.com/kb/guide/is-sqlite-supported-in-vercel)
+1. Open the [Supabase dashboard](https://supabase.com/dashboard), select your **Free** organization, and choose **New project**.
+2. Name it `vitarecall`, generate a strong database password, and save that password in your password manager. Choose a region near the Vercel function region you intend to use. Do not buy an IPv4 add-on, upgrade the organization, or select a paid compute option for this pilot.
+3. Wait until the database is ready. Open **Connect** and select **Transaction pooler**. Copy the entire PostgreSQL connection string; use the exact pooler host and username supplied by Supabase, with port `6543`.
+4. Replace the password placeholder privately with the database password, percent-encoding reserved characters such as `@`, `#`, `?`, `/`, and `%`. This is a **database password**, not a Supabase publishable/anon API key. Never send the completed string in chat, a screenshot, or GitHub.
+5. If certificate verification needs the project certificate, download the root certificate from **Database settings > SSL**. Save its PEM contents as `DATABASE_CA_CERT`; real newlines and literal `\n` sequences are accepted. TLS verification stays enabled; do not set `NODE_TLS_REJECT_UNAUTHORIZED=0` or use `rejectUnauthorized: false`.
 
-## 1. Persistent backend
+The shared transaction pooler is appropriate for short-lived serverless connections and available over IPv4 without a paid add-on. The driver uses parameterized, unnamed queries rather than named prepared statements. [Supabase connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres)
 
-Choose a Node/container host with HTTPS and a persistent disk or volume. Use the existing Dockerfile and **one instance**, not multiple independently writable database copies. No hosting account or paid plan is selected by these files.
+### Database privacy
 
-For Docker, build the repository's Dockerfile, mount the persistent volume at `/app/data`, and expose the configured `PORT` (default `3001`) through HTTPS ingress. The image runs `npm start`. For non-Docker hosting, use Node 22.17+ with `node:sqlite`, `npm ci`, `npm run build`, and `npm start`.
+VitaRecall connects to PostgreSQL **only from the server**. Its tables live in the private `vitarecall` schema, not the public schema; do not add `vitarecall` to Supabase's exposed API schemas or grant browser roles access. The migration denies public/browser-role access. Keep the existing app's session, CSRF and patient-permission checks in place. Supabase Auth and the browser Data API are not used by this version, so no Supabase key belongs in the frontend. [Supabase data security](https://supabase.com/docs/guides/database/secure-data)
 
-Set these on the **backend only**:
+## 2. Apply the schema explicitly
+
+Keep the existing local `.env` file and provider keys; do not overwrite it. Add `DATABASE_URL` privately. Then, from the repository root:
+
+```sh
+npm ci
+npm run db:migrate
+```
+
+This command creates the app's private schema using the checked-in migration in `supabase/migrations/001_initial.sql`. It is a real write to the configured database: double-check you selected the new VitaRecall project before running it. The schema migration is repeatable and does not seed fictional patients or create Walrus blobs. Server startup and Vercel builds do not automatically run migrations.
+
+For schema administration, Supabase recommends a direct connection or a session-pooler connection if your local network lacks IPv6. Use that connection privately as `DATABASE_URL` for the migration if needed, then set the **transaction-pooler** URL in Vercel for application traffic. Do not alter only the username or invent a pooler hostname. [Connection modes](https://supabase.com/docs/guides/database/connecting-to-postgres)
+
+To test the PostgreSQL-backed app locally, keep `APP_ORIGIN=http://localhost:5173` and `COOKIE_SECURE=false`, set `DATABASE_URL`, then run `npm run dev`. Leaving `DATABASE_URL` empty continues to use the local SQLite database. Neither choice deletes or automatically copies the other database.
+
+### Existing localhost profiles are not automatically imported
+
+An empty Supabase project has no existing local accounts or receipts. A localhost recovery code cannot restore an account absent from the deployed database. For the five-tester pilot, create profiles on the deployed URL and return to that same deployment.
+
+If preserving local profiles is required, use the optional explicit importer **before** creating profiles in Supabase. Stop the local API first, make a private consistent SQLite backup, and run `npm run db:migrate` against the intended Supabase project. With that PostgreSQL `DATABASE_URL` configured privately, run:
+
+```sh
+npm run db:import:sqlite -- --sqlite ./data/vitarecall.sqlite --confirm-empty-destination
+```
+
+The importer requires an empty destination and copies data in one PostgreSQL transaction. It preserves patient IDs and therefore Walrus namespaces, recovery hashes, care permissions, message order/cutoffs, and blob receipts. Keep the original Walrus account/delegate. Existing browser login sessions and temporary rate limits/locks are not copied; sign in or restore the profile again after import. Do not copy only blobs or create new patient IDs and expect old namespaces to follow. Never upload SQLite databases or private proof-login files to GitHub. Schema creation and data import remain separate, intentional operations.
+
+## 3. Configure Vercel Hobby
+
+Import the GitHub repository at its root into a **personal Hobby** project. Keep the checked-in settings: **Vite**, Node **22.x**, install `npm ci`, build `npm run build:vercel`, output `dist`. Enable **Fluid Compute**, which supports the configured 120-second function duration on Hobby; no paid plan is required for that configuration. [Vercel function duration](https://vercel.com/docs/functions/configuring-functions/duration)
+
+Use the stable production domain that Vercel assigns the project for `APP_ORIGIN`. Add the following variables privately in **Settings > Environment Variables**, scoped to **Production**, then redeploy:
 
 | Variable | Value |
 | --- | --- |
-| `NODE_ENV` | `production` |
-| `APP_ORIGIN` | Exact stable HTTPS frontend origin assigned to the Vercel project, or your chosen custom domain; no path |
+| `DATABASE_URL` | Complete private Supabase shared transaction-pooler connection string |
+| `DATABASE_CA_CERT` | Optional PEM root certificate, when needed for certificate trust |
+| `APP_ORIGIN` | Exact stable public HTTPS origin, with no path, query, credentials, or fragment |
 | `COOKIE_SECURE` | `true` |
-| `DATA_DIR` | Persistent disk mount, `/app/data` for Docker |
-| `PORT` | Port expected by the backend host; image default `3001` |
-| `GEMINI_API_KEY` | Your private Gemini key |
-| `GEMINI_MODEL` | Optional: use the model tested locally, or the code default |
+| `GEMINI_API_KEY` | Your existing private Gemini key |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite`, or a model you have separately verified |
 | `MEMWAL_ACCOUNT_ID` | Your own Walrus Memory mainnet account ID |
-| `MEMWAL_KEY` | Your private delegate key |
+| `MEMWAL_KEY` | Your existing private delegate key |
 | `MEMWAL_URL` | `https://relayer.memory.walrus.xyz` |
 
-Never put keys in GitHub, screenshots, frontend variables, or a `VITE_` variable. Do not upload the local `.env`; add values privately in the backend host's settings.
+Vercel sets `VERCEL=1`; the app then enforces production HTTPS/cookies and refuses to start without `DATABASE_URL`. `DATA_DIR` is not used for the hosted database. The checked-in configuration sets `NODEJS_HELPERS=0` so Express owns request-body parsing and its 32 KB limit. Do not override this. [Node helper configuration](https://vercel.com/docs/functions/runtimes/node-js/advanced-node-configuration)
 
-Confirm the backend's `/api/health` returns `{"status":"ok"}` over HTTPS. This does not verify Gemini or authenticated Walrus access; test those in the app.
+**All private values are server variables in this Vercel project.** Never prefix them with `VITE_`. The old advice to keep Gemini/Walrus keys on a separate backend applies only to the retired split deployment, not this setup. Do not upload `.env`; enter the individual values in Vercel settings. `CLINICIAN_INVITE_CODE` is optional and used only by the legacy email-account flow.
 
-### Local accounts versus deployed accounts
+The frontend builds without contacting Supabase, Gemini, or Walrus. A successful build therefore does **not** verify provider credentials, migrations, or network access. A missing database/configuration problem returns a sanitized `503` API response instead of silently storing an ephemeral SQLite database.
 
-The deployed backend starts with an empty database unless you deliberately migrate one. A localhost recovery code cannot restore an account missing from the deployed database. Testers should create profiles on the deployed URL and return to that deployment.
+### Routing and connection behavior
 
-To preserve local identities and receipts, migrate SQLite privately using a consistent SQLite backup, or stop the local server before copying the database. Do not copy only a live `.sqlite` file while its WAL has uncheckpointed changes. Keep the same Walrus account/delegate and preserve patient IDs. Never commit databases, recovery codes, or private proof login files. Back up the deployed database and test restoration. Deployment does not perform a migration automatically.
+Vercel compiles `api/index.js` as a Node function. `vercel.json` sends `/api` and `/api/*` to it before static-file and SPA routing; Express receives the API request path. Vite assets are served from `dist`. No external backend host or cross-origin browser calls are needed. [Vercel Node functions](https://vercel.com/docs/functions/runtimes/node-js), [routing configuration](https://vercel.com/docs/project-configuration/vercel-json)
 
-## 2. Vercel frontend
+Each warm function instance reuses its app and PostgreSQL pool. `attachDatabasePool` manages idle connections through the Vercel lifecycle. Sessions, request coordination and rate-limit state belong in PostgreSQL rather than a particular warm instance. There are no schema changes on normal requests. [Vercel pooling guide](https://vercel.com/kb/guide/connection-pooling-with-functions)
 
-Import the GitHub repository at its root and use Node 22.x. The checked-in `vercel.json` selects **Other** as the framework preset, `npm ci` for installation, and `npm run build:vercel` for the build. Do not override the output directory to `dist`: this script emits Vercel Build Output API v3 under `.vercel/output`.
-
-Add this environment variable to the Vercel project:
-
-| Variable | Value |
-| --- | --- |
-| `VITA_API_ORIGIN` | Actual public HTTPS origin of the persistent backend; no `/api`, path, query, credentials, or fragment |
-
-The backend address is configuration, not a secret. **Do not add Gemini or Walrus private keys to this frontend project.** Redeploy after changing `VITA_API_ORIGIN`.
-
-The build fails deliberately when the origin is missing, uses HTTP, names localhost/an IP/documentation placeholder, or includes a path or credentials. A missing-origin build failure is a setup guard, not a Gemini error.
-
-Only Vite's compiled frontend goes into `.vercel/output/static`. The generated routing configuration proxies `/api` and `/api/*` to the same paths on the backend before static-file routing. Other page paths fall back to `index.html`. No Express server or SQLite file runs on Vercel. [Build Output API](https://vercel.com/docs/build-output-api), [routing configuration](https://vercel.com/docs/build-output-api/configuration), [static output](https://vercel.com/docs/build-output-api/primitives)
-
-External rewrites act as a reverse proxy: the browser stays on the frontend URL, while the backend must be reachable by Vercel. [Vercel rewrites](https://vercel.com/docs/routing/rewrites)
-
-## 3. Connect the exact frontend origin
-
-After the stable Vercel production domain or custom domain is known, set backend `APP_ORIGIN` to exactly that HTTPS origin and restart/redeploy the backend. Share only this URL with testers.
-
-Do not point the browser directly at a cross-origin API. The app intentionally uses same-origin `/api` fetches, an HttpOnly `Secure; SameSite=Strict` cookie, and `X-CSRF-Token`. The rewrite keeps these on the frontend origin. Do not weaken cookies or remove CSRF checks to work around configuration errors.
-
-Random preview URLs will not match production `APP_ORIGIN`. Use a separately configured backend/database for previews, or the stable production frontend for the pilot. Do not allow arbitrary origins. The backend currently trusts one reverse-proxy hop for client IP handling; verify the real hosting proxy chain before relying on IP rate limits, especially with Vercel's additional hop.
+Do not deploy old `.vercel/output` artifacts from the former proxy build using `--prebuilt`. Use a fresh Git deployment and the current build configuration. Random preview URLs will not match production `APP_ORIGIN`; use a separate database and exact origin for preview testing, or share only the stable production URL. Do not weaken CSRF or cookie protections to make previews work.
 
 ## 4. Acceptance checks before inviting testers
 
-These are checks to run after deployment, not claims that a live deployment has passed:
+These checks still need to run against the actual deployed project:
 
-1. At the frontend domain, `/api/health` must return JSON, not HTML, a redirect, or a 404.
-2. In a fresh browser profile, inspect `/api/session` in developer tools. Its cookie must belong to the frontend host and have HttpOnly, Secure, SameSite Strict, and path `/`. Never copy the cookie value into a report. Refresh and confirm the session persists. Authenticated API responses must be `Cache-Control: no-store`.
-3. Create a fictional profile. Verify its POST goes to the frontend origin with the CSRF header and succeeds through the proxy. Save the recovery code privately, not in screenshots.
-4. Confirm a POST with incorrect `Origin` or missing/incorrect CSRF token is rejected. Do not disable those checks to resolve an auth error.
-5. Send a harmless greeting for a real Gemini response; run the signed Walrus connection test in Settings. A configured badge or health endpoint alone does not prove live access.
-6. With consent, save one intentional fictional memory, wait for **stored** and its full blob ID, then choose **New conversation** and ask about that detail without restating it. Check its retrieved memory source. Do not duplicate a save after an ambiguous timeout without checking its receipt.
-7. Restore the same profile in another browser with its private recovery code; start a new conversation and check recall. Re-entering the same public X handle creates a different workspace and is not account recovery.
-8. Restart/redeploy the backend without changing its persistent disk, then repeat login and recall. Record failures if accounts or receipts disappear. Also check a phone viewport.
+1. `/api/health` on the frontend domain must return JSON, not HTML, a redirect, or a 404. A green health endpoint is not a live Gemini/Walrus verification.
+2. In a fresh browser profile, open the app and inspect `/api/session`. Its cookie must belong to the frontend host and have HttpOnly, Secure, SameSite Strict, and path `/`. Refresh and confirm the same session persists. Do not copy cookie values into reports. API responses must have `Cache-Control: no-store`.
+3. Create a fictional patient. Confirm the creation POST goes to the same origin with the CSRF header. Save the recovery code privately. Confirm a POST with a wrong `Origin` or missing/incorrect CSRF token is rejected.
+4. Send a harmless greeting for an actual Gemini response, and run the signed Walrus connection test in Settings. Configured badges alone do not prove live access.
+5. With consent, save one useful fictional memory, wait for **stored** and its full blob ID, then choose **New conversation**. Ask about that detail without repeating it; inspect the retrieved source and confirm the trace says no old chat history was used. Check the existing receipt before retrying an ambiguous save timeout.
+6. Restore the same profile in a different browser/device using the private recovery code. Start a new conversation and confirm recall. Re-entering the same public X handle without its code creates a separate workspace; it does not recover an account.
+7. Redeploy the Vercel app without changing the database or Walrus account. Confirm the existing session/profile, consent, receipts and recall survive. Also verify phone layout and concurrent duplicate-request behavior.
+8. Record actual dates, receipts and failures with the [five fictional patient scripts](patient-testing/README.md). Do not call a pending job a blob or manufacture evidence.
 
-Review provider usage and hosting logs during the pilot. Never cache authenticated API responses at either host. External rewrites have a platform timeout; the client timeout is 90 seconds, so inspect failed/unknown operations before retrying writes. [Vercel proxy limits](https://vercel.com/docs/limits)
+## Free-tier limits and recovery
 
-## Local commands remain unchanged
+This can operate within free-tier allowances, not unlimited or guaranteed permanent free service. Vercel Hobby is for personal non-commercial use. Supabase Free has resource limits and may pause inactive projects. Watch dashboards, quotas and logs during the pilot; resume a paused project through Supabase before testing. Avoid upgrading or enabling billed services if the budget is zero. [Vercel Hobby](https://vercel.com/docs/plans/hobby), [Supabase pricing](https://supabase.com/pricing)
 
-`npm run dev` still starts the localhost frontend and API. `npm run build` still builds `dist`, and `npm start` still starts the persistent Node app. Run `npm run test:deployment` to check origin validation and routing without contacting a provider or writing a mainnet blob.
+Gemini and Walrus have their own quotas and terms; hosting being free does not guarantee every provider request is free. Verify the selected Gemini project/tier and the managed Walrus relayer's current allowance before a testing session. A quota or provider outage must remain an honest error, not a fake response or receipt.
+
+Keep private database backups and test restoration. The database maps app identities to patient IDs and Walrus namespaces: Walrus blobs alone cannot restore that mapping. Free hosting is not a backup or healthcare-compliance guarantee.
+
+## Local and persistent-server alternatives
+
+`npm run dev`, `npm run build`, and `npm start` retain their local roles. `npm run test:deployment` checks configuration without contacting providers. With no `DATABASE_URL`, local development uses SQLite at `DATA_DIR/vitarecall.sqlite`.
+
+The existing Dockerfile/persistent Node option still works: build the frontend, run `npm start`, configure the exact HTTPS `APP_ORIGIN`, and keep secure cookies. If using SQLite, mount a persistent `DATA_DIR`, run one instance and back it up. Never put SQLite in a Vercel Function or `/tmp`. This alternative is not required for the selected free Vercel + Supabase pilot.

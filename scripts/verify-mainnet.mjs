@@ -51,7 +51,7 @@ async function appSession() {
     login = { name: "Walrus Mainnet Demo", email: `walrus-demo-${randomBytes(5).toString("hex")}@vitarecall.example`, password: randomBytes(30).toString("base64url"), role: "patient", note: "Fictional verification patient only. Do not publish this login file." };
     writeFileSync(loginFile, JSON.stringify(login, null, 2) + "\n", { mode: 0o600 });
   }
-  if (store.get("SELECT id FROM users WHERE email=?", login.email)) await request("/auth/login", "POST", { email: login.email, password: login.password });
+  if (await store.get("SELECT id FROM users WHERE email=?", login.email)) await request("/auth/login", "POST", { email: login.email, password: login.password });
   else await request("/auth/register", "POST", { name: login.name, email: login.email, password: login.password, role: login.role });
   const { patients } = await request("/patients");
   const patient = patients[0];
@@ -128,5 +128,5 @@ try {
   process.exitCode = 1;
 } finally {
   if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
-  store?.close();
+  await store?.close();
 }

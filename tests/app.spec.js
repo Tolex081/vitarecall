@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, isolateFonts } from "./browser-fixtures.js";
 
 const password = "Browser test patient password";
 async function register(page, email, name = "Ada Example") {
@@ -75,6 +75,7 @@ test("mobile chat is easy to find and the page fits the screen", async ({ page }
 test("invited clinician links only a shared patient and patient can revoke access", async ({ browser }) => {
   const patientContext = await browser.newContext();
   const clinicianContext = await browser.newContext();
+  await Promise.all([isolateFonts(patientContext), isolateFonts(clinicianContext)]);
   const patientPage = await patientContext.newPage();
   const clinicianPage = await clinicianContext.newPage();
   try {

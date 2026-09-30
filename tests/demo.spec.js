@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, isolateFonts } from "./browser-fixtures.js";
 
 const nav = (page, name, mobile = false) => page.getByRole("navigation", { name: mobile ? "Mobile navigation" : "Primary navigation", exact: true }).getByRole("button", { name, exact: true });
 const newUsername = () => "demo" + Date.now().toString(36) + Math.random().toString(36).slice(2, 4);
@@ -34,6 +34,7 @@ test("clinician demo needs no invite and restores the same workspace with a priv
   const patientName = await page.getByLabel("Patient workspace", { exact: true }).inputValue();
   expect(await page.evaluate(() => Object.values(localStorage))).not.toContain(recoveryCode);
   const otherDevice = await browser.newContext();
+  await isolateFonts(otherDevice);
   try {
     const restorePage = await otherDevice.newPage();
     await restorePage.route("**/api/avatar/twitter/**", route => route.fulfill({ status: 404, body: "" }));
