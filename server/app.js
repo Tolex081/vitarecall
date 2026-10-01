@@ -5,6 +5,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createSessions, equal, hash, hashPassword, publicUser, verifyPassword } from "./auth.js";
 import { createAvatarHandler } from "./avatars.js";
 import { createCoordination } from "./coordination.js";
+import { createConversationMemory, conversationNamespace } from "./conversation-memory.js";
 
 const now = () => new Date().toISOString();
 function fail(status, message, code) { throw Object.assign(new Error(message), { status, code }); }
@@ -39,6 +40,7 @@ export function createApp({ config, store, memory, chat }) {
   const sessions = createSessions(store, config);
   app.use("/api", sessions.load);
   const coordination = createCoordination(store);
+  const conversationMemory = createConversationMemory({ store, memory });
   const releaseLease = async lease => {
     try { await coordination.release(lease); }
     catch { console.error("Operation lease cleanup was unavailable; the lease will expire automatically."); }
@@ -191,13 +193,14 @@ export function createApp({ config, store, memory, chat }) {
   });
   app.get("/api/patients/:id/workspace", async (req, res) => {
     const p = await patientFor(req, req.params.id);
-    const [messages, memories, notes, tasks, careTeam, stats] = await Promise.all([
+    const [messages, memories, notes, tasks, careTeam, stats, automaticMemory] = await Promise.all([
       readMessages(p.id, req.user.id), readMemories(p.id), readNotes(p.id), readTasks(p.id),
       store.all("SELECT u.id,u.name,d.username FROM care_team c JOIN users u ON u.id=c.clinician_id LEFT JOIN demo_profiles d ON d.user_id=u.id WHERE c.patient_id=?", p.id),
       store.get("SELECT COUNT(DISTINCT blob_id) AS count FROM memories WHERE patient_id=? AND status='stored'", p.id),
+      conversationMemory.state(p.id, req.user.id),
     ]);
     await patientFor(req, p.id);
-    res.json({ patient: patientJSON(p, req.user), messages, memories, notes, tasks,
+    res.json({ patient: patientJSON(p, req.user), messages, memories, notes, tasks, conversationMemory: automaticMemory,
       careTeam: careTeam.map(member => ({ ...member, isDemo: Boolean(member.username) })),
       stats: { storedBlobs: Number(stats.count), accountId: memory.accountId || null, network: "mainnet" }, services: services() });
   });
@@ -208,6 +211,35 @@ export function createApp({ config, store, memory, chat }) {
     await store.run("UPDATE patients SET memory_consent=?,consent_updated_at=? WHERE id=?", Number(req.body.enabled), now(), p.id);
     await store.audit(req.user.id, p.id, req.body.enabled ? "consent.enabled" : "consent.disabled");
     res.json({ patient: patientJSON(await patientFor(req, p.id), req.user) });
+  });
+  app.patch("/api/patients/:id/conversation-memory/consent", async (req, res) => {
+    const p = await patientFor(req, req.params.id);
+    if (p.user_id !== req.user.id) fail(403, "Only the owner can enable automatic memory for their private chat.");
+    if (typeof req.body.enabled !== "boolean") fail(400, "Consent must be true or false.");
+    await conversationMemory.setEnabled(p.id, req.user.id, req.body.enabled);
+    res.json({ conversationMemory: await conversationMemory.state(p.id, req.user.id) });
+  });
+  app.post("/api/patients/:id/conversation-memory/sync", async (req, res) => {
+    const p = await patientFor(req, req.params.id);
+    if (p.user_id !== req.user.id) fail(403, "Only the owner can sync their private chat memory.");
+    const bucket = await coordination.consume(`cost:${req.user.id}:conversation-sync`, 20, 60000);
+    if (!bucket.allowed) fail(429, "Please wait a minute before checking automatic memory again.");
+    res.json({ conversationMemory: await conversationMemory.sync(p.id, req.user.id) });
+  });
+  app.post("/api/patients/:id/conversation-memory/backfill", async (req, res) => {
+    const p = await patientFor(req, req.params.id);
+    if (p.user_id !== req.user.id) fail(403, "Only the owner can archive their earlier private chats.");
+    if (!await conversationMemory.enabled(p.id, req.user.id)) fail(403, "Enable automatic conversation memory before archiving earlier chats.");
+    const remaining = await store.transaction(async tx => {
+      const rows = await tx.all("SELECT c.* FROM chat_requests c WHERE c.patient_id=? AND c.user_id=? AND c.state='done' AND NOT EXISTS (SELECT 1 FROM conversation_memories m WHERE m.patient_id=c.patient_id AND m.user_id=c.user_id AND m.request_id=c.request_id) ORDER BY c.created_at LIMIT 11", p.id, req.user.id);
+      for (const row of rows.slice(0, 10)) {
+        const exchange = JSON.parse(row.response_json);
+        await conversationMemory.queue(tx, { patientId: p.id, userId: req.user.id, requestId: row.request_id, messages: [exchange.userMessage, exchange.assistantMessage] });
+      }
+      await tx.audit(req.user.id, p.id, 'conversation_memory.earlier_chats_requested');
+      return rows.length > 10;
+    });
+    res.json({ remaining, conversationMemory: await conversationMemory.state(p.id, req.user.id) });
   });
   app.post("/api/patients/:id/care-code", async (req, res) => {
     const p = await patientFor(req, req.params.id);
@@ -226,24 +258,40 @@ export function createApp({ config, store, memory, chat }) {
     });
     res.json({ patient: patientJSON(await patientFor(req, p.id), req.user) });
   });
-  function recalled(results, patientId) {
+  function recalled(results, patientId, userId, privateOnly = false) {
     return results.flatMap(result => {
       try {
         const value = JSON.parse(result.text);
+        if (value.schema === "vitarecall.conversation.v1") {
+          if (value.patientId !== patientId || value.userId !== userId || typeof value.text !== "string") return [];
+          return [{ ...result, text: `[Private conversation, part ${value.part}/${value.parts}; user statements are self-reported; Vita replies are AI-generated, NOT verified facts; recorded ${value.recordedAt}] ${value.text}` }];
+        }
+        if (privateOnly) return [];
         if (value.schema === "vitarecall.memory.v1") {
           if (value.patientId !== patientId || typeof value.text !== "string") return [];
           return [{ ...result, text: `[${value.provenance}; recorded ${value.recordedAt}] ${value.text}` }];
         }
       } catch { /* External memories are still untrusted source text. */ }
-      return [result];
+      return privateOnly ? [] : [result];
     });
+  }
+  async function recallContext(query, patientId, userId) {
+    const hasPrivate = await store.get('SELECT id FROM conversation_memories WHERE patient_id=? AND user_id=? LIMIT 1', patientId, userId);
+    const requests = [{ namespace: `vitarecall:patient:${patientId}`, privateOnly: false }];
+    if (hasPrivate) requests.unshift({ namespace: conversationNamespace(patientId, userId), privateOnly: true });
+    const results = await Promise.allSettled(requests.map(item => memory.recall(query, item.namespace)));
+    const found = results.flatMap((result, index) => result.status === 'fulfilled' ? recalled(result.value, patientId, userId, requests[index].privateOnly) : []);
+    const memories = [...new Map(found.map(item => [item.blobId, item])).values()].slice(0, 12);
+    const unavailable = results.some(result => result.status === 'rejected');
+    return { memories, status: unavailable ? (memories.length ? 'partial' : 'unavailable') : memories.length ? 'recalled' : 'empty' };
   }
   app.post("/api/patients/:id/recall", async (req, res) => {
     const p = await patientFor(req, req.params.id);
-    const results = await memory.recall(input(req.body.query, "Search query", 1000), `vitarecall:patient:${p.id}`);
+    const result = await recallContext(input(req.body.query, "Search query", 1000), p.id, req.user.id);
+    if (result.status === 'unavailable') fail(503, "Walrus recall is unavailable. Please try again later.");
     await patientFor(req, p.id); // Access may have been revoked during network work.
     await store.audit(req.user.id, p.id, "memory.recalled");
-    res.json({ memories: recalled(results, p.id) });
+    res.json({ memories: result.memories, partial: result.status === 'partial' });
   });
   const lastMessageSequence = async (patientId, userId, db = store) => (await db.get("SELECT COALESCE(MAX(rowid),0) AS sequence FROM messages WHERE patient_id=? AND user_id=?", patientId, userId)).sequence;
   async function resetConversation(patientId, userId, cutoff, db = store) {
@@ -270,7 +318,7 @@ export function createApp({ config, store, memory, chat }) {
     if (req.body.freshConversation !== undefined && typeof req.body.freshConversation !== "boolean") fail(400, "Fresh conversation must be true or false.");
     if (!chat.configured) fail(503, "Gemini is not connected yet. Add GEMINI_API_KEY on the server.", "LLM_NOT_CONFIGURED");
     const existing = await store.get("SELECT * FROM chat_requests WHERE patient_id=? AND user_id=? AND request_id=?", p.id, req.user.id, rid);
-    if (existing?.state === "done") return res.json(JSON.parse(existing.response_json));
+    if (existing?.state === "done") return res.json({ ...JSON.parse(existing.response_json), conversationMemory: await conversationMemory.state(p.id, req.user.id) });
     if (existing) fail(409, "This request was already received. Refresh the conversation before retrying.");
     const lease = await coordination.acquire(`chat:${p.id}:${req.user.id}`);
     if (!lease) fail(409, "Wait for Vita's current reply before sending another message.");
@@ -279,17 +327,21 @@ export function createApp({ config, store, memory, chat }) {
       const inserted = await store.run("INSERT INTO chat_requests VALUES (?,?,?,?,?,?) ON CONFLICT(patient_id,user_id,request_id) DO NOTHING", p.id, req.user.id, rid, "pending", null, now());
       if (!Number(inserted.changes)) {
         const duplicate = await store.get("SELECT * FROM chat_requests WHERE patient_id=? AND user_id=? AND request_id=?", p.id, req.user.id, rid);
-        if (duplicate?.state === "done") return res.json(JSON.parse(duplicate.response_json));
+        if (duplicate?.state === "done") return res.json({ ...JSON.parse(duplicate.response_json), conversationMemory: await conversationMemory.state(p.id, req.user.id) });
         fail(409, "This request was already received. Refresh the conversation before retrying.");
       }
       requestCreated = true;
+      const automaticMemoryEnabled = p.user_id === req.user.id && await conversationMemory.enabled(p.id, req.user.id);
       const cutoff = await lastMessageSequence(p.id, req.user.id);
-      const history = req.body.freshConversation ? [] : (await readMessages(p.id, req.user.id)).slice(-12);
+      const history = req.body.freshConversation ? [] : (await readMessages(p.id, req.user.id)).slice(-20);
       let memories = [], memoryStatus = memory.configured ? "empty" : "not-configured";
       if (memory.configured) {
         try {
-          memories = recalled(await memory.recall(message, `vitarecall:patient:${p.id}`), p.id);
-          memoryStatus = memories.length ? "recalled" : "empty";
+          const recent = history.filter(turn => turn.role === 'user').slice(-2).map(turn => turn.text.slice(0, 600)).join('\n');
+          const query = recent ? `${message}\nRecent context: ${recent}` : `${message}\nRelevant earlier context: preferred name, care concerns, preferences, restrictions, previous questions.`;
+          const recalledContext = await recallContext(query, p.id, req.user.id);
+          memories = recalledContext.memories;
+          memoryStatus = recalledContext.status;
         } catch {
           // An unavailable retrieval service must not prevent a general answer.
           // Keep the lack of recalled context explicit in both model and UI.
@@ -298,7 +350,7 @@ export function createApp({ config, store, memory, chat }) {
         }
       }
       await patientFor(req, p.id);
-      const text = await chat.respond({ role: req.user.role, message, history, memories, memoryStatus,
+      const text = await chat.respond({ role: req.user.role, message, history, memories, memoryStatus, automaticMemoryEnabled,
         profile: { name: p.name, username: p.username || null, isDemo: Boolean(p.username) } });
       await patientFor(req, p.id);
       const userMessage = { id: randomUUID(), role: "user", text: message, createdAt: now(), sources: [] };
@@ -311,10 +363,11 @@ export function createApp({ config, store, memory, chat }) {
         if (req.body.freshConversation) await resetConversation(p.id, req.user.id, cutoff, tx);
         for (const m of [userMessage, assistantMessage]) await tx.run("INSERT INTO messages (id,patient_id,user_id,role,text,sources_json,created_at) VALUES (?,?,?,?,?,?,?)", m.id, p.id, req.user.id, m.role, m.text, JSON.stringify(m.sources), m.createdAt);
         await tx.run("INSERT INTO message_memory_traces VALUES (?,?)", assistantMessage.id, JSON.stringify(assistantMessage.memoryTrace));
+        if (automaticMemoryEnabled) await conversationMemory.queue(tx, { patientId: p.id, userId: req.user.id, requestId: rid, messages: [userMessage, assistantMessage] });
         await tx.run("UPDATE chat_requests SET state='done',response_json=? WHERE patient_id=? AND user_id=? AND request_id=?", JSON.stringify(response), p.id, req.user.id, rid);
         await tx.audit(req.user.id, p.id, "chat.completed");
       });
-      res.json(response);
+      res.json({ ...response, conversationMemory: await conversationMemory.state(p.id, req.user.id) });
     } catch (error) {
       if (requestCreated) await store.run("UPDATE chat_requests SET state='failed' WHERE patient_id=? AND user_id=? AND request_id=? AND state='pending'", p.id, req.user.id, rid);
       throw error;

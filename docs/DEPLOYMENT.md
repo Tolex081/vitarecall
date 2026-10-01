@@ -27,7 +27,7 @@ npm ci
 npm run db:migrate
 ```
 
-This command creates the app's private schema using the checked-in migration in `supabase/migrations/001_initial.sql`. It is a real write to the configured database: double-check you selected the new VitaRecall project before running it. The schema migration is repeatable and does not seed fictional patients or create Walrus blobs. Server startup and Vercel builds do not automatically run migrations.
+This command applies `001_initial.sql` and the additive `002_conversation_memory.sql` from `supabase/migrations`. Apply both before deploying the automatic-memory release. It is a real write to the configured database: double-check you selected the VitaRecall project before running it. These migrations are repeatable and do not overwrite existing patients or consent, seed fictional patients, or create Walrus blobs. Server startup and Vercel builds do not automatically run migrations.
 
 For schema administration, Supabase recommends a direct connection or a session-pooler connection if your local network lacks IPv6. Use that connection privately as `DATABASE_URL` for the migration if needed, then set the **transaction-pooler** URL in Vercel for application traffic. Do not alter only the username or invent a pooler hostname. [Connection modes](https://supabase.com/docs/guides/database/connecting-to-postgres)
 

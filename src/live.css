@@ -24,3 +24,26 @@
 @media(max-width:950px){.top-actions>.pilot-tag{display:none}}
 @media(max-width:730px){.avatar.large{width:46px;height:46px;font-size:16px}.greeting-line{gap:11px}.sign-out-button{font-size:10px;padding:8px 9px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition:none!important;scroll-behavior:auto!important}}
+/* Private automatic chat archives; long receipts must fit narrow screens. */
+.automatic-memory { margin: 16px; padding: 16px; border: 1px solid #d4e4de; border-radius: 14px; background: #f2f8f5; }
+.automatic-memory-heading, .automatic-memory-heading strong, .automatic-memory-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.automatic-memory-heading { justify-content: space-between; }
+.automatic-memory p { margin: 10px 0; line-height: 1.55; }
+.automatic-memory-status { font-size: 12px; color: #275f54; }
+.context-column .automatic-memory { margin: 0; font-size: 12px; }
+.context-column .automatic-memory-heading strong { font-size: 13px; }
+.context-column .automatic-memory .small-text { font-size: 10px; }
+.context-column .automatic-memory-actions .button { font-size: 11px; }
+.memory-trace.partial { background: #fbf3e3; color: #9b854f; }
+.automatic-memory .button { white-space: normal; }
+.conversation-receipts { margin-top: 16px; }
+.conversation-receipts summary { cursor: pointer; padding: 8px 0; }
+.conversation-receipts .memory-record { margin-top: 12px; background: white; padding: 12px; border-radius: 10px; min-width: 0; }
+.conversation-receipts small { display: block; margin-top: 5px; }
+.archived-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.rich-message { white-space: normal; }
+.rich-message p { white-space: pre-wrap; margin: 0 0 12px; }
+.rich-message p:last-child { margin-bottom: 0; }
+.rich-message ul, .rich-message ol { padding-left: 20px; margin: 10px 0; }
+.rich-message li { padding: 3px 0; }
+.rich-message h4 { font-size: 1em; margin: 14px 0 8px; }

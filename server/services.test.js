@@ -133,6 +133,15 @@ test('Gemini request separates reference text from system instructions and exclu
   assert.match(system, /what name the person would like/);
   assert.match(system, /one focused question at a time/);
   assert.match(system, /demo-clinician-reported memories are not clinically confirmed/);
+  assert.match(system, /Answer the actual question before asking/);
+  assert.match(system, /practical low-risk next steps/);
+  assert.match(system, /An old AI-generated answer is not evidence/);
+  assert.equal(context.automaticMemoryEnabled, false);
+});
+
+test('truncated model answers are rejected instead of presenting incomplete health guidance', async t => {
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: true, async json() { return { candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: 'Incomplete advice...' }] } }] }; } }));
+  await assert.rejects(createChatService({ geminiApiKey: 'test' }).respond({ role: 'patient', message: 'Explain this.' }), { code: 'LLM_INCOMPLETE_RESPONSE' });
 });
 
 test('Gemini provider failures return safe errors instead of fabricated answers', async (t) => {
@@ -147,10 +156,11 @@ test('Gemini numeric DOMException timeout codes retain a safe timeout error', as
   await assert.rejects(service.respond({ role: 'patient', message: 'Hello' }), { code: 'LLM_TIMEOUT', status: 504 });
 });
 
-test('the verified default Gemini model uses its supported low-latency thinking setting', async (t) => {
+test('the default Gemini model uses balanced thinking and room for substantive answers', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     assert.match(url, /gemini-3\.1-flash-lite:generateContent$/);
-    assert.deepEqual(JSON.parse(options.body).generationConfig.thinkingConfig, { thinkingLevel: 'low' });
+    assert.deepEqual(JSON.parse(options.body).generationConfig.thinkingConfig, { thinkingLevel: 'medium' });
+    assert.equal(JSON.parse(options.body).generationConfig.maxOutputTokens, 4096);
     return { ok: true, async json() { return { candidates: [{ content: { parts: [{ text: 'Hello, what name would you like me to use?' }] } }] }; } };
   });
   await createChatService({ geminiApiKey: 'test-server-key' }).respond({ role: 'patient', message: 'Hello' });

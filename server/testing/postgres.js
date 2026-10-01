@@ -10,7 +10,7 @@ export async function createTestPostgresPool({ migrate = true, filename } = {}) 
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated; END IF;
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role; END IF;
   END $$;`);
-  const migration = await readFile(new URL('../../supabase/migrations/001_initial.sql', import.meta.url), 'utf8');
+  const migration = (await Promise.all(['001_initial', '002_conversation_memory'].map(version => readFile(new URL(`../../supabase/migrations/${version}.sql`, import.meta.url), 'utf8')))).join('\n');
   if (migrate) await database.exec(migration);
   let tail = Promise.resolve();
   async function acquire() {

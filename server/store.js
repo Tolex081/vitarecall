@@ -56,6 +56,18 @@ export function createStore(filename) {
       error TEXT, created_at TEXT NOT NULL,
       UNIQUE(patient_id,user_id,request_id)
     );
+    CREATE TABLE IF NOT EXISTS conversation_memory_settings (
+      patient_id TEXT NOT NULL REFERENCES patients(id), user_id TEXT NOT NULL REFERENCES users(id),
+      enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)), updated_at TEXT NOT NULL,
+      PRIMARY KEY(patient_id,user_id)
+    );
+    CREATE TABLE IF NOT EXISTS conversation_memories (
+      id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id), user_id TEXT NOT NULL REFERENCES users(id),
+      request_id TEXT NOT NULL, part INTEGER NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL,
+      job_id TEXT, blob_id TEXT, error TEXT, created_at TEXT NOT NULL,
+      UNIQUE(patient_id,user_id,request_id,part)
+    );
+    CREATE INDEX IF NOT EXISTS conversation_memories_scope ON conversation_memories(patient_id,user_id,status,created_at);
     CREATE TABLE IF NOT EXISTS notes (
       id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id), user_id TEXT NOT NULL REFERENCES users(id),
       text TEXT NOT NULL, created_at TEXT NOT NULL

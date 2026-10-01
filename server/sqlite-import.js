@@ -13,6 +13,8 @@ const tables = {
   message_memory_traces: "message_id,trace_json",
   chat_requests: "patient_id,user_id,request_id,state,response_json,created_at",
   memories: "id,patient_id,user_id,request_id,text,provenance,status,job_id,blob_id,owner,namespace,error,created_at",
+  conversation_memory_settings: "patient_id,user_id,enabled,updated_at",
+  conversation_memories: "id,patient_id,user_id,request_id,part,payload,status,job_id,blob_id,error,created_at",
   notes: "id,patient_id,user_id,text,created_at",
   tasks: "id,patient_id,user_id,title,completed,created_at",
   audit_events: "id,user_id,patient_id,action,created_at",
@@ -32,7 +34,9 @@ export async function importSqlite({ filename, destination, confirmEmptyDestinat
     // only the main file. One read transaction supplies a consistent snapshot.
     source.exec("PRAGMA query_only=ON; BEGIN");
     for (const [table, columns] of Object.entries(tables)) {
-      snapshot[table] = source.prepare(`SELECT ${columns} FROM ${table}`).all();
+      const exists = source.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
+      if (!exists && ['conversation_memory_settings', 'conversation_memories'].includes(table)) snapshot[table] = [];
+      else snapshot[table] = source.prepare(`SELECT ${columns} FROM ${table}`).all();
     }
     source.exec("COMMIT");
   } finally { source.close(); }

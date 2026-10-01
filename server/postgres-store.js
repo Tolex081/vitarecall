@@ -1,10 +1,11 @@
 import pg from "pg";
 
-export const SCHEMA_VERSION = "001_initial";
+export const SCHEMA_VERSION = "002_conversation_memory";
 const tables = new Set([
   "users", "sessions", "demo_profiles", "patients", "care_team", "messages",
   "chat_conversations", "message_memory_traces", "chat_requests", "memories",
   "notes", "tasks", "audit_events", "rate_limits", "operation_locks",
+  "conversation_memory_settings", "conversation_memories",
 ]);
 
 // The application uses fixed SQL and bound values. This lexer converts its ?

@@ -108,6 +108,126 @@ async function patientSetup(app, name = 'Alice') {
   return { client, patient: await client.patient() };
 }
 
+test('automatic memory is opt-in, saves full exchanges once, and recalls after clear without local history', async t => {
+  const app = await harness(t);
+  const { client, patient } = await patientSetup(app);
+  const route = suffix => patientPath(patient, suffix);
+  await client.request('PATCH', route('consent'), { enabled: true });
+  const old = await client.request('POST', route('chat'), { message: 'Before automatic consent.', requestId: randomUUID() });
+  assert.equal(old.body.conversationMemory.enabled, false);
+  assert.equal(old.body.conversationMemory.records.length, 0, 'Manual save consent must not authorize full transcripts.');
+  await client.request('PATCH', route('conversation-memory/consent'), { enabled: true });
+  const payload = { message: 'My fictional name is Mira. I prefer examples with beans.', requestId: randomUUID() };
+  const reply = await client.request('POST', route('chat'), payload);
+  assert.equal(reply.status, 200);
+  assert.equal(reply.body.conversationMemory.counts.queued, 1);
+  assert.equal(reply.body.conversationMemory.counts.stored, 0);
+  assert.match(reply.body.conversationMemory.records[0].text, /User-reported.*\nMy fictional/s);
+  assert.match(reply.body.conversationMemory.records[0].text, /Vita AI-generated \(not a clinical record\)/);
+  await client.request('POST', route('chat'), payload);
+  await client.request('POST', route('conversation/reset'), {});
+  assert.deepEqual((await client.request('GET', workspacePath(patient))).body.messages, []);
+  const sibling = sameSession(await siblingInstance(t, app), client);
+  await Promise.all([client.request('POST', route('conversation-memory/sync'), {}), sibling.request('POST', route('conversation-memory/sync'), {})]);
+  assert.equal(app.calls.submit.length, 1);
+  const submission = app.calls.submit[0];
+  assert.equal(submission.namespace, `vitarecall:chat:${patient.id}:${client.user.id}`);
+  assert.ok(submission.text.length <= 8000);
+  app.receipts.set('test-job-1', { status: 'stored', blobId: 'test-auto-blob' });
+  const synced = await client.request('POST', route('conversation-memory/sync'), {});
+  assert.equal(synced.body.conversationMemory.counts.stored, 1);
+  assert.equal(synced.body.conversationMemory.records[0].blobId, 'test-auto-blob');
+  app.memory.recall = async (_query, namespace) => namespace === submission.namespace ? [{ text: submission.text, blobId: 'test-auto-blob' }] : [];
+  const recall = await client.request('POST', route('chat'), { message: 'What is my name and food preference?', requestId: randomUUID() });
+  assert.equal(recall.status, 200);
+  assert.deepEqual(recall.body.assistantMessage.memoryTrace, { status: 'recalled', sourceCount: 1, historyUsed: false });
+  assert.deepEqual(app.calls.chat.at(-1).history, []);
+  assert.match(app.calls.chat.at(-1).memories[0].text, /Mira/);
+  assert.equal(app.calls.chat.at(-1).automaticMemoryEnabled, true);
+});
+
+test('earlier hidden chats need explicit backfill, which is idempotent; pausing cancels queued work', async t => {
+  const app = await harness(t);
+  const { client, patient } = await patientSetup(app);
+  const route = suffix => patientPath(patient, suffix);
+  await client.request('POST', route('chat'), { message: 'Old fictional exchange.', requestId: randomUUID() });
+  await client.request('POST', route('conversation/reset'), {});
+  assert.equal((await client.request('POST', route('conversation-memory/backfill'), {})).status, 403);
+  await client.request('PATCH', route('conversation-memory/consent'), { enabled: true });
+  assert.equal((await client.request('GET', workspacePath(patient))).body.conversationMemory.records.length, 0);
+  const backfill = await client.request('POST', route('conversation-memory/backfill'), {});
+  assert.equal(backfill.status, 200);
+  assert.equal(backfill.body.remaining, false);
+  assert.equal(backfill.body.conversationMemory.counts.queued, 1);
+  assert.match(backfill.body.conversationMemory.records[0].text, /Old fictional exchange/);
+  assert.equal((await client.request('POST', route('conversation-memory/backfill'), {})).body.conversationMemory.records.length, 1);
+  const paused = await client.request('PATCH', route('conversation-memory/consent'), { enabled: false });
+  assert.equal(paused.body.conversationMemory.counts.cancelled, 1);
+  await client.request('POST', route('conversation-memory/sync'), {});
+  assert.equal(app.calls.submit.length, 0);
+  const next = await client.request('POST', route('chat'), { message: 'Not archived after pause.', requestId: randomUUID() });
+  assert.equal(next.body.conversationMemory.records.length, 1);
+});
+
+test('automatic memory cannot leak to other patients or linked clinicians', async t => {
+  const app = await harness(t);
+  const { client, patient } = await patientSetup(app);
+  const route = suffix => patientPath(patient, suffix);
+  await client.request('PATCH', route('conversation-memory/consent'), { enabled: true });
+  await client.request('POST', route('chat'), { message: 'Private fictional conversation.', requestId: randomUUID() });
+  await client.request('POST', route('conversation-memory/sync'), {});
+  const outsider = (await patientSetup(app, 'Bob')).client;
+  for (const suffix of ['conversation-memory/sync', 'conversation-memory/backfill']) assert.equal((await outsider.request('POST', route(suffix), {})).status, 404);
+  const clinician = browser(app);
+  await clinician.register('Doctor', 'clinician');
+  await clinician.request('POST', '/api/patients/link', { code: patient.careCode });
+  const workspace = await clinician.request('GET', workspacePath(patient));
+  assert.deepEqual(workspace.body.conversationMemory.records, []);
+  assert.equal((await clinician.request('PATCH', route('conversation-memory/consent'), { enabled: true })).status, 403);
+  assert.equal((await clinician.request('POST', route('conversation-memory/sync'), {})).status, 403);
+  // Even a misrouted provider result must match both patient and private author.
+  app.memory.recall = async () => [{ blobId: 'misrouted-private', text: app.calls.submit[0].text }];
+  const result = await clinician.request('POST', route('chat'), { message: 'What was said?', requestId: randomUUID() });
+  assert.equal(result.body.assistantMessage.sources.length, 0);
+});
+
+test('automatic storage uncertainty never triggers duplicate uploads or fake confirmation', async t => {
+  const app = await harness(t);
+  const { client, patient } = await patientSetup(app);
+  const route = suffix => patientPath(patient, suffix);
+  await client.request('PATCH', route('conversation-memory/consent'), { enabled: true });
+  await client.request('POST', route('chat'), { message: 'Fictional uncertain save.', requestId: randomUUID() });
+  let submits = 0;
+  app.memory.submit = async () => { submits++; throw new Error('private upstream details'); };
+  for (let i = 0; i < 2; i++) {
+    const response = await client.request('POST', route('conversation-memory/sync'), {});
+    assert.equal(response.body.conversationMemory.counts.unknown, 1);
+    assert.equal(response.body.conversationMemory.counts.stored, 0);
+    assert.doesNotMatch(JSON.stringify(response.body), /private upstream details/);
+  }
+  assert.equal(submits, 1);
+  app.memory.submit = async () => ({ jobId: 'incomplete-receipt' });
+  app.memory.receipt = async () => ({ status: 'stored' });
+  await client.request('POST', route('chat'), { message: 'Fictional second exchange.', requestId: randomUUID() });
+  const result = await client.request('POST', route('conversation-memory/sync'), {});
+  assert.equal(result.body.conversationMemory.counts.stored, 0);
+  assert.equal(result.body.conversationMemory.counts.processing, 1);
+});
+
+test('withdrawing automatic consent during a model reply prevents archiving the exchange', async t => {
+  const app = await harness(t);
+  const { client, patient } = await patientSetup(app);
+  const route = suffix => patientPath(patient, suffix);
+  await client.request('PATCH', route('conversation-memory/consent'), { enabled: true });
+  app.chat.respond = async () => {
+    assert.equal((await client.request('PATCH', route('conversation-memory/consent'), { enabled: false })).status, 200);
+    return 'Fictional reply after consent was withdrawn.';
+  };
+  const result = await client.request('POST', route('chat'), { message: 'Please explain.', requestId: randomUUID() });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.conversationMemory.records, []);
+});
+
 // Separate Express instances deliberately share only durable database state.
 // This simulates requests reaching different serverless function instances.
 async function siblingInstance(t, app) {
