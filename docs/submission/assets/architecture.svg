@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="920" viewBox="0 0 1500 920" role="img" aria-labelledby="title desc">
+<title id="title">VitaRecall: what lives where</title><desc id="desc">The browser talks to an Express API. PostgreSQL stores application state and durable archive jobs. The server submits and recalls memory through the Walrus Memory relayer, and sends authorized retrieved context to Gemini. Walrus stores encrypted blobs. The relayer sees plaintext.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8" fill="none" stroke="#268476" stroke-width="1.5"/></marker></defs>
+<rect width="1500" height="920" rx="32" fill="#f5f8f4"/>
+<g font-family="Arial, sans-serif" fill="#193c3b">
+<text x="68" y="70" font-size="17" letter-spacing="3" fill="#268476">VITARECALL / IMPLEMENTATION</text>
+<text x="68" y="130" font-size="46" font-weight="700">What lives where</text>
+<text x="68" y="171" font-size="23" fill="#607673">Application state and persistent memory have different jobs.</text>
+<g fill="#fff" stroke="#d6e5df" stroke-width="2">
+<rect x="65" y="250" width="320" height="190" rx="20"/>
+<rect x="585" y="250" width="330" height="190" rx="20" fill="#163f3b" stroke="#163f3b"/>
+<rect x="1115" y="250" width="320" height="190" rx="20"/>
+<rect x="205" y="615" width="430" height="190" rx="20"/>
+<rect x="865" y="615" width="430" height="190" rx="20"/>
+</g>
+<g fill="none" stroke="#268476" stroke-width="3" marker-start="url(#arrow)" marker-end="url(#arrow)">
+<path d="M402 342 H568"/><path d="M932 342 H1098"/>
+<path d="M670 458 L478 597"/><path d="M830 458 L1022 597"/>
+</g>
+<g font-size="20" fill="#536e68" text-anchor="middle">
+<text x="485" y="303">chat + receipts</text><text x="1015" y="283">prompt +</text><text x="1015" y="310">recalled context</text>
+<text x="469" y="502">profiles, messages,</text><text x="469" y="529">jobs and receipts</text>
+<text x="1040" y="502">archive exchanges;</text><text x="1040" y="529">recall relevant sources</text>
+</g>
+<text x="95" y="297" font-size="17" letter-spacing="2" fill="#268476">INTERFACE</text>
+<text x="95" y="342" font-size="29" font-weight="700">React / Vite</text>
+<text x="95" y="379" font-size="21">Browser + mobile UI</text>
+<text x="95" y="409" font-size="21" fill="#607673">Restore the same profile</text>
+<text x="615" y="297" font-size="17" letter-spacing="2" fill="#a5ddc5">APPLICATION SERVER</text>
+<text x="615" y="342" font-size="29" fill="#fff" font-weight="700">Express on Vercel</text>
+<text x="615" y="379" font-size="21" fill="#e7f4ec">Authorization + orchestration</text>
+<text x="615" y="409" font-size="21" fill="#b9d4ca">Server-only credentials</text>
+<text x="1145" y="297" font-size="17" letter-spacing="2" fill="#268476">RESPONSE MODEL</text>
+<text x="1145" y="342" font-size="29" font-weight="700">Google Gemini</text>
+<text x="1145" y="379" font-size="21">gemini-3.1-flash-lite</text>
+<text x="1145" y="409" font-size="21" fill="#607673">Receives recalled text</text>
+<text x="235" y="660" font-size="17" letter-spacing="2" fill="#268476">APPLICATION STATE</text>
+<text x="235" y="705" font-size="29" font-weight="700">Supabase PostgreSQL</text>
+<text x="235" y="744" font-size="21">Sessions, chat state, durable queue</text>
+<text x="235" y="778" font-size="21" fill="#607673">Not replaced by Walrus</text>
+<text x="895" y="660" font-size="17" letter-spacing="2" fill="#268476">PERSISTENT MEMORY</text>
+<text x="895" y="705" font-size="29" font-weight="700">MemWal → Walrus mainnet</text>
+<text x="895" y="744" font-size="21">Hosted relayer + encrypted blobs</text>
+<text x="895" y="778" font-size="21" fill="#607673">Completed job → full blob receipt</text>
+<text x="750" y="866" font-size="21" text-anchor="middle" fill="#607673">Trust boundary: the hosted relayer processes plaintext. Fictional-data pilot only.</text>
+</g></svg>

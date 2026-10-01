@@ -1,0 +1,117 @@
+{
+  "schema": "vitarecall.submission-demo.v1",
+  "origin": "https://vitarecall.vercel.app",
+  "startedAt": "2026-10-01T19:45:33.218Z",
+  "appCommit": "466c700dedd1946bc72df5cc00b10a38c628cfd2",
+  "model": "gemini-3.1-flash-lite",
+  "network": "mainnet",
+  "design": "One operator-controlled fictional profile; same-day ablation; separate authenticated clients; identical neutral prompt before/after; old chat history excluded. Not a volunteer study or clinical validation.",
+  "limitations": [
+    "Two preference-bearing exchanges archived; read-back answers deliberately not archived to limit self-reinforcement.",
+    "Semantic retrieval and model wording are nondeterministic.",
+    "A source receipt is not proof of exhaustive recall or permanent availability."
+  ],
+  "stages": {
+    "before": {
+      "capturedAt": "2026-10-01T19:45:46.882Z",
+      "prompt": "Please help me prepare for an appointment using my saved preferences. What should I bring, and how should you format the answer? If you have no saved preferences, say so instead of guessing.",
+      "response": "I don’t have any saved preferences for you yet, so I will provide a clear, bulleted list for your appointment preparation. If you have a specific way you prefer to receive information—such as shorter summaries or a narrative style—let me know, and we can use that for future conversations.\n\nTo make the most of your visit, here are a few things you might consider bringing:\n\n*   **Medication List:** A current list of all medications, supplements, and vitamins you take, including dosages. Taking photos of the labels is often easier than writing them down.\n*   **Prioritized Concerns:** A short list of the top 2–3 symptoms or questions you want to address. It helps to put the most important one first in case time is limited.\n*   **Health Records:** Any recent test results, immunization records, or notes from other specialists if they aren't already in your clinician's system.\n*   **Note-taking Tools:** A notebook or a digital app to jot down the clinician's advice, next steps, or instructions.\n*   **Insurance and ID:** Your current insurance card and a photo ID.\n\nWould you like help drafting a list of questions based on a specific concern you are having, or would you prefer to focus on organizing your current health information first?",
+      "memoryTrace": {
+        "status": "empty",
+        "sourceCount": 0,
+        "historyUsed": false
+      },
+      "sourceBlobIds": [],
+      "automaticSavingDuringExchange": false,
+      "completedAt": "2026-10-01T19:45:48.357Z",
+      "screenshot": "assets/before-answer.png"
+    },
+    "save": {
+      "capturedAt": "2026-10-01T19:47:18.324Z",
+      "prompt": "Fictional demonstration only, not medical care. Call me Mira. My appointment-preparation preference is exactly three short numbered items. The final item should remind me to bring my written questions. Please acknowledge these preferences briefly.",
+      "response": "Hello Mira. I have noted your preference for appointment preparation: I will provide exactly three short, numbered items, with the final one always being a reminder to bring your written questions. I am ready to help whenever you have a topic you would like to prepare for.",
+      "memoryTrace": {
+        "status": "empty",
+        "sourceCount": 0,
+        "historyUsed": false
+      },
+      "sourceBlobIds": [],
+      "automaticSavingDuringExchange": true,
+      "receipts": [
+        {
+          "status": "stored",
+          "blobId": "BpJTmfLlBXttC-4NiUwzMZZlitird9UWKm4CYM4zwX8",
+          "jobId": "0cabe685-7b18-4386-b8ad-ca24c34e1315",
+          "walrusScanUrl": "https://walruscan.com/mainnet/blob/BpJTmfLlBXttC-4NiUwzMZZlitird9UWKm4CYM4zwX8",
+          "aggregatorStatus": 200,
+          "encryptedBytes": 1192,
+          "encryptedSha256": "087fcf88d860300ede7c377f783147116340bf255cd6f89ef77f4b2a97a72158"
+        }
+      ],
+      "completedAt": "2026-10-01T19:47:43.770Z"
+    },
+    "after": {
+      "capturedAt": "2026-10-01T19:48:46.240Z",
+      "prompt": "Please help me prepare for an appointment using my saved preferences. What should I bring, and how should you format the answer? If you have no saved preferences, say so instead of guessing.",
+      "response": "Hello Mira. I have your preferences saved: I will provide exactly three short, numbered items, with the final one being a reminder to bring your written questions.\n\n1. Bring a current list of all medications, vitamins, and supplements you are taking, including dosages.\n2. Note down a brief timeline of your symptoms or any specific changes you have noticed since your last visit.\n3. Remember to bring your written list of questions for your care team.",
+      "memoryTrace": {
+        "status": "recalled",
+        "sourceCount": 1,
+        "historyUsed": false
+      },
+      "sourceBlobIds": [
+        "BpJTmfLlBXttC-4NiUwzMZZlitird9UWKm4CYM4zwX8"
+      ],
+      "automaticSavingDuringExchange": false,
+      "completedAt": "2026-10-01T19:48:47.803Z",
+      "screenshot": "assets/after-answer.png",
+      "screenshotNote": "Live app response, captured with chat scroll area expanded for reading; text and status unchanged. Mobile captures use the unmodified viewport."
+    },
+    "correct": {
+      "capturedAt": "2026-10-01T19:52:14.315Z",
+      "prompt": "Fictional demonstration only. I am correcting my earlier appointment-preparation preferences. Please replace the three-item numbered format with one short unnumbered paragraph. The last reminder should now be to arrange transport, not to bring written questions. My name is still Mira. Please acknowledge this update briefly.",
+      "response": "Hello Mira. I have updated your preferences: I will now provide appointment preparation as a single short paragraph, and the final reminder will be to arrange your transport. I am ready to help whenever you have a topic you would like to prepare for.",
+      "memoryTrace": {
+        "status": "recalled",
+        "sourceCount": 1,
+        "historyUsed": false
+      },
+      "sourceBlobIds": [
+        "BpJTmfLlBXttC-4NiUwzMZZlitird9UWKm4CYM4zwX8"
+      ],
+      "automaticSavingDuringExchange": true,
+      "receipts": [
+        {
+          "status": "stored",
+          "blobId": "uOAEfc-vf2OpxPDEunpfy-c3q2kpxSKqLADOtj9aMLQ",
+          "jobId": "2e2ddac6-8b91-4d3c-8163-51865a4ef715",
+          "walrusScanUrl": "https://walruscan.com/mainnet/blob/uOAEfc-vf2OpxPDEunpfy-c3q2kpxSKqLADOtj9aMLQ",
+          "aggregatorStatus": 200,
+          "encryptedBytes": 1250,
+          "encryptedSha256": "1750d85dc4d17f3df94dce8ca8315d3add9c0835309196e5a3ff1a9533bdf2bd"
+        }
+      ],
+      "completedAt": "2026-10-01T19:52:45.427Z",
+      "screenshot": "assets/correct-answer.png",
+      "screenshotNote": "Live app response, captured with chat scroll area expanded for reading; text and status unchanged. Mobile captures use the unmodified viewport."
+    },
+    "updated": {
+      "capturedAt": "2026-10-01T19:54:20.712Z",
+      "prompt": "Please help me prepare for an appointment using my saved preferences. What should I bring, and how should you format the answer? If you have no saved preferences, say so instead of guessing.",
+      "response": "Hello Mira, I have updated your preferences to a single short paragraph format with a final reminder about transport. To prepare for your appointment, you should bring your current medication list, any relevant health records or recent test results, and a form of identification, and please remember to arrange your transport.",
+      "memoryTrace": {
+        "status": "recalled",
+        "sourceCount": 2,
+        "historyUsed": false
+      },
+      "sourceBlobIds": [
+        "BpJTmfLlBXttC-4NiUwzMZZlitird9UWKm4CYM4zwX8",
+        "uOAEfc-vf2OpxPDEunpfy-c3q2kpxSKqLADOtj9aMLQ"
+      ],
+      "automaticSavingDuringExchange": false,
+      "completedAt": "2026-10-01T19:54:22.312Z",
+      "screenshot": "assets/updated-answer.png",
+      "screenshotNote": "Live app response, captured with chat scroll area expanded for reading; text and status unchanged. Mobile captures use the unmodified viewport."
+    }
+  }
+}

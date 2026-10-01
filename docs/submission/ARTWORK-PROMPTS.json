@@ -1,0 +1,16 @@
+{
+  "mode": "built-in image_gen",
+  "createdOn": "2026-10-01",
+  "reference": "src/assets/vitarecall-walrus-clinician.png",
+  "disclosure": "AI-generated editorial illustrations; not evidence screenshots, official Walrus logos, or endorsement.",
+  "assets": [
+    {
+      "file": "assets/walrus-cover.png",
+      "prompt": "Use case: stylized-concept\nAsset type: premium landscape Medium article cover for VitaRecall, a fictional-data AI care companion using Walrus Memory.\nInput images: Image 1 is character and palette reference only, not an edit target. Keep the recognizable kind brown walrus, ivory tusks and gentle eyes; remove the white coat and stethoscope for this scene, use a simple teal cardigan to signal a companion rather than a licensed doctor.\nPrimary request: a welcoming walrus holding an open notebook, beside a flowing ribbon that connects two elegant abstract chat windows across time. A small luminous teal memory pebble sits along the ribbon. Suggest continuity and returning to a conversation. No actual app UI or technical claims.\nStyle/medium: refined tactile 3D editorial illustration, soft matte clay, warm ivory and deep ocean teal with restrained peach accents. Polished, humane, uncluttered.\nComposition/framing: wide 16:9 image, clean editorial spacing, main illustration centered with generous breathing room, large shapes readable as a thumbnail.\nLighting/mood: soft daylight, calm and thoughtful.\nConstraints: no text, no letters, no logos, no watermarks, no medical instruments, no official Walrus branding or partnership badge, no fake screenshots, no chains or padlocks suggesting absolute privacy."
+    },
+    {
+      "file": "assets/walrus-changing-preferences.png",
+      "prompt": "Use case: stylized-concept\nAsset type: landscape editorial illustration for the engineering section of VitaRecall's Medium article.\nInput images: Image 1 is the VitaRecall mascot character reference only. Use the same friendly brown walrus and tusks, but a simple teal cardigan instead of clinical clothing.\nPrimary request: the walrus thoughtfully compares two small paper preference cards on an uncluttered desk. The older card bears only a simple three-line list symbol; the newer card bears one flowing paragraph symbol. A slender luminous teal thread connects the newer card to a blank speech bubble, suggesting that remembering well includes listening when preferences change. Both cards remain present, old card slightly faded but not destroyed. This is a conceptual illustration, not an interface or evidence.\nStyle/medium: polished tactile 3D editorial rendering, warm ivory background, ocean teal, soft peach accents, elegant calm lighting.\nComposition/framing: wide 16:9, close medium view, clean negative space, clear visual hierarchy, readable simple shapes.\nConstraints: no words, no letters or numerals, no logos, no watermark, no locks, no medical equipment, no fake receipts, no official partnership marks."
+    }
+  ]
+}

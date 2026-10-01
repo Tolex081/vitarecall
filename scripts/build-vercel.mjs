@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { copyPublicSubmission } from "./publish-submission.mjs";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const serverSecrets = ["DATABASE_URL", "DATABASE_CA_CERT", "GEMINI_API_KEY", "MEMWAL_KEY", "CLINICIAN_INVITE_CODE", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY"];
@@ -17,6 +18,8 @@ export async function buildVercel(env = process.env) {
   // Vercel compiles api/index.js as a Node function. Only frontend assets belong
   // in dist; no manual Build Output API bundle and no external backend proxy.
   await build({ root: projectRoot, build: { outDir: "dist", emptyOutDir: true } });
+  const artifacts = await copyPublicSubmission(projectRoot, path.join(projectRoot, "dist"));
+  console.log(`Published ${artifacts} reviewed submission artifacts under /submission/.`);
   console.log("Vercel frontend built. The /api function uses server-side DATABASE_URL; run database migrations separately before serving traffic.");
 }
 

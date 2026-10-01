@@ -4,6 +4,10 @@ A patient and clinician demo with quick X/Twitter-handle profiles, care notes, c
 
 This is a working hackathon implementation for **synthetic patient data**. Live Gemini responses and mainnet Walrus writes require your own provider credentials and end-to-end verification. Configuring the code does not itself create a blob or prove hackathon eligibility.
 
+## Inspect the memory demonstration
+
+The [public article and evidence package](https://vitarecall.vercel.app/submission/index.html) includes a Medium-ready article, custom illustrations, a reproducible before/after demonstration, and a detailed owner checklist. Its [sanitized evidence](docs/submission/evidence.json) records an October 1 live experiment: the same neutral question before saving, after a confirmed mainnet preference, and after a correction. Both return questions excluded prior chat history and retrieved the expected source blobs. This is one operator-controlled fictional profile, not proof of independent volunteer adoption or clinical validation. Hosting this package does not mean the Medium article or hackathon entry has been submitted. See [package source and publishing notes](docs/submission/README.md).
+
 ## Testing and free deployment
 
 Start with the [five fictional patient scripts](docs/patient-testing/README.md) for structured multi-day memory tests. The [deployment guide](docs/DEPLOYMENT.md) explains the selected architecture: **Vercel Hobby hosts the frontend and API; Supabase Free stores app data in PostgreSQL; Walrus mainnet stores and recalls long-term memories**. Add the private `DATABASE_URL`, apply `npm run db:migrate`, and configure all provider keys as server-only Vercel variables. No separate backend host or `VITA_API_ORIGIN` is needed. Free tiers have usage and availability limits; a successful build is not proof of a working deployment.
