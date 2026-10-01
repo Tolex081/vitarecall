@@ -1,4 +1,5 @@
 import { Database, RefreshCw } from 'lucide-react';
+import { blobExplorerUrl } from './memory-links';
 
 const labels = { queued: 'Queued in app - not yet on Walrus', processing: 'Awaiting Walrus confirmation', stored: 'Stored on Walrus mainnet', unknown: 'Submission unconfirmed', failed: 'Storage failed', cancelled: 'Cancelled before submission' };
 export default function ConversationMemory({ state, canManage, configured, busy, onChange, onSync, onBackfill, receipts = false }) {
@@ -6,7 +7,7 @@ export default function ConversationMemory({ state, canManage, configured, busy,
   const pending = state.counts.queued + state.counts.processing;
   return <section className="automatic-memory" aria-label="Automatic conversation memory">
     <div className="automatic-memory-heading"><strong><Database size={16} /> Automatic conversation memory</strong><span className="soft-pill">{state.enabled ? 'On' : 'Off'}</span></div>
-    <p>{state.enabled ? 'Every new message and Vita reply is queued automatically. No individual save button needed. Clearing the chat does not remove confirmed memories.' : 'Give consent once to automatically save every new conversation, including your messages and Vita replies. No need to select individual messages.'}</p>
+    <p>{state.enabled ? 'Every new message and Vita reply is queued automatically. Clearing the chat does not remove confirmed memories. You can turn automatic saving off below.' : 'Automatic saving is off for this profile. Turn it on to archive future messages and Vita replies without selecting individual messages.'}</p>
     <p className="small-text muted">Fictional information only. The Walrus relayer processes plaintext before encryption; relevant recalled text goes to Gemini. Chat archives stay private to this profile, separate from care-team notes. This does not automatically upload earlier chats. Pausing cancels unsent work, but cannot recall in-flight writes or delete existing blobs.</p>
     <div className="automatic-memory-actions"><button className="button secondary" disabled={busy} onClick={() => onChange(!state.enabled)}>{state.enabled ? 'Pause automatic memory' : 'Enable automatic memory'}</button>{(pending > 0 || receipts) && <button className="text-button" disabled={busy || !configured} onClick={onSync}><RefreshCw size={14} />Refresh chat memory</button>}</div>
     <p className="automatic-memory-status" role="status">{state.counts.stored} confirmed chat {state.counts.stored === 1 ? 'part' : 'parts'} on Walrus{pending > 0 ? `; ${pending} awaiting storage` : ''}.{state.counts.unknown > 0 ? ` ${state.counts.unknown} unconfirmed - open Patient memory for details.` : ''}{state.counts.failed > 0 ? ` ${state.counts.failed} failed - not stored.` : ''}</p>
@@ -21,7 +22,7 @@ export default function ConversationMemory({ state, canManage, configured, busy,
           <details><summary>View archived text</summary><p className="archived-text">{record.text}</p></details>
           {record.error && <p role="status">{record.error}</p>}
           {record.jobId && <div className="receipt-line"><span>Job ID</span><code>{record.jobId}</code></div>}
-          {record.blobId && <><div className="receipt-line"><span>Blob ID</span><code>{record.blobId}</code></div><a className="text-button" href={`https://aggregator.walrus-mainnet.walrus.space/v1/blobs/${encodeURIComponent(record.blobId)}?strict_consistency_check=true`} target="_blank" rel="noreferrer">View encrypted chat blob on mainnet</a></>}
+          {record.blobId && <><div className="receipt-line"><span>Blob ID</span><code>{record.blobId}</code></div><a className="text-button" href={blobExplorerUrl(record.blobId)} target="_blank" rel="noreferrer">View blob on Walrus Scan</a></>}
         </article>)}
       </details>
     </>}

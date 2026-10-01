@@ -37,8 +37,8 @@ test("patient signup, notes, tasks, consent, logout and reload work with the rea
   await expect(page.getByRole("checkbox", { name: "Bring appointment questions", exact: true })).toBeChecked();
 
   await nav(page, "Settings").click();
-  await page.getByRole("checkbox", { name: "Allow Walrus Memory saves", exact: true }).click();
-  await expect(page.getByRole("checkbox", { name: "Allow Walrus Memory saves", exact: true })).toBeChecked();
+  await page.getByRole("checkbox", { name: "Allow reviewed memory saves", exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Allow reviewed memory saves", exact: true })).toBeChecked();
   const careCode = await page.locator(".care-code code").innerText();
   await page.getByRole("button", { name: "Generate a new care code", exact: true }).click();
   await expect(page.locator(".care-code code")).not.toHaveText(careCode);
@@ -115,8 +115,8 @@ test.describe("isolated provider fixture (no live writes)", () => {
     const email = `remember-${Date.now()}@example.test`;
     await register(page, email, "Memory Example");
     await nav(page, "Settings").click();
-    await page.getByRole("checkbox", { name: "Allow Walrus Memory saves", exact: true }).click();
-    await expect(page.getByRole("checkbox", { name: "Allow Walrus Memory saves", exact: true })).toBeChecked();
+    await page.getByRole("checkbox", { name: "Allow reviewed memory saves", exact: true }).click();
+    await expect(page.getByRole("checkbox", { name: "Allow reviewed memory saves", exact: true })).toBeChecked();
     await nav(page, "Patient memory").click();
     await page.getByLabel("Memory to save", { exact: true }).fill("I prefer short appointment summaries.");
     await page.getByRole("button", { name: "Save reviewed memory", exact: true }).click();

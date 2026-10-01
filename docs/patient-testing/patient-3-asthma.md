@@ -8,7 +8,7 @@ Can Vita respond compassionately, give appropriately limited educational support
 
 Allow about 15 minutes on day 1 and 5–10 minutes on each return day. Use the organiser's deployed website. Choose **Patient** and a unique demo username, for example `chidi_test_03`. An X-style username is a demo label, not verified X login. Keep your private recovery code securely; never put it in chat, screenshots, a public issue, or your report. Use **Restore demo** with that code when returning on another device, not a new account.
 
-Before this session, open **Walrus memory** (or **Patient memory**), read the disclosure, and select **Enable automatic memory** once. Every new completed exchange is then queued, including your messages and Vita replies. No per-message save is needed. The archive is a fictional transcript; AI-generated advice is not a verified clinical record.
+Read the sign-up disclosure: **Save chats to Walrus automatically** is checked by default for new profiles. Leave it on for this memory test, or opt out before chatting if you do not want uploads. Restored profiles keep their previous setting; inspect **Walrus memory** or **Settings** and resume if needed. Each new completed exchange is queued automatically, including Vita replies. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
 
 ## Day 1 — introduce yourself naturally
 

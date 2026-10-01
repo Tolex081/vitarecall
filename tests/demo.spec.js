@@ -3,7 +3,7 @@ import { test, expect, isolateFonts } from "./browser-fixtures.js";
 const nav = (page, name, mobile = false) => page.getByRole("navigation", { name: mobile ? "Mobile navigation" : "Primary navigation", exact: true }).getByRole("button", { name, exact: true });
 const newUsername = () => "demo" + Date.now().toString(36) + Math.random().toString(36).slice(2, 4);
 
-async function createDemo(page, role = "patient", { photo = false, prefixAt = false } = {}) {
+async function createDemo(page, role = "patient", { photo = false, prefixAt = false, automaticMemory = true } = {}) {
   const username = newUsername();
   await page.route("**/api/avatar/twitter/**", route => route.fulfill(photo
     ? { contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" fill="#dceee5"/><circle cx="48" cy="36" r="18" fill="#275f54"/><path d="M16 96v-8a32 32 0 0 1 64 0v8" fill="#275f54"/></svg>' }
@@ -14,6 +14,8 @@ async function createDemo(page, role = "patient", { photo = false, prefixAt = fa
   if (role === "clinician") await page.getByText("Clinician", { exact: true }).click();
   await expect(page.getByLabel("Clinic invitation code", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Email address", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("checkbox", { name: "Save chats to Walrus automatically", exact: true })).toBeChecked();
+  if (!automaticMemory) await page.getByRole("checkbox", { name: "Save chats to Walrus automatically", exact: true }).uncheck();
   await page.getByRole("button", { name: "Start chatting with Vita", exact: true }).click();
   const recovery = page.getByRole("region", { name: "Save your recovery code", exact: true });
   await expect(recovery).toBeVisible();
@@ -90,7 +92,7 @@ test("clinician demo needs no invite and restores the same workspace with a priv
   await expect(page.getByRole("button", { name: "Link a patient", exact: true })).toHaveCount(0);
   await expect(page.getByText("Which fictional patient are we discussing", { exact: false })).toBeVisible();
   await nav(page, "Settings").click();
-  const consent = page.getByRole("checkbox", { name: "Allow Walrus Memory saves", exact: true });
+  const consent = page.getByRole("checkbox", { name: "Allow reviewed memory saves", exact: true });
   await expect(consent).toBeEnabled();
   await consent.click();
   await expect(consent).toBeChecked();
@@ -111,7 +113,7 @@ test("clinician demo needs no invite and restores the same workspace with a priv
     await expect(restorePage.getByLabel("Patient workspace", { exact: true })).toHaveValue(patientName);
     await expect(restorePage.getByRole("region", { name: "Save your recovery code", exact: true })).toHaveCount(0);
     await nav(restorePage, "Settings").click();
-    await expect(restorePage.getByRole("checkbox", { name: "Allow Walrus Memory saves", exact: true })).toBeChecked();
+    await expect(restorePage.getByRole("checkbox", { name: "Allow reviewed memory saves", exact: true })).toBeChecked();
   } finally { await otherDevice.close(); }
   expect(errors).toEqual([]);
 });
@@ -120,7 +122,7 @@ test.describe("isolated demo memory fixture — no live Walrus or Gemini request
   test.use({ baseURL: "http://127.0.0.1:3188" });
   test("reviewed memory survives a fresh conversation without previous chat history", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await createDemo(page);
+    await createDemo(page, "patient", { automaticMemory: false });
     await page.getByRole("button", { name: "I've saved my code", exact: true }).click();
     const detail = "FICTIONAL TEST: Call me Ada. I prefer short appointment summaries.";
     await page.getByLabel("Message Vita", { exact: true }).fill(detail);

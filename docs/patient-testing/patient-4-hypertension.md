@@ -8,7 +8,7 @@ Test whether saved patient-reported context makes a return conversation more use
 
 Allow about 15 minutes on day 1 and 5–10 minutes on each return day. Use the organiser's deployed URL, choose **Patient**, and enter a unique demo username such as `grace_test_04`. This is a demo label, not verified X authentication. Keep your private recovery code securely, out of chat and public evidence. On another device use **Restore demo** and this code; creating another account will not restore the same patient memory.
 
-Before this session, open **Walrus memory** (or **Patient memory**), read the disclosure, and select **Enable automatic memory** once. Every new completed exchange is then queued, including your messages and Vita replies. No per-message save is needed. The archive is a fictional transcript; AI-generated advice is not a verified clinical record.
+Read the sign-up disclosure: **Save chats to Walrus automatically** is checked by default for new profiles. Leave it on for this memory test, or opt out before chatting if you do not want uploads. Restored profiles keep their previous setting; inspect **Walrus memory** or **Settings** and resume if needed. Each new completed exchange is queued automatically, including Vita replies. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
 
 ## Day 1 — start a supportive conversation
 

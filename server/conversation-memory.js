@@ -21,6 +21,12 @@ export function conversationChunks({ patientId, userId, requestId, messages }) {
 }
 
 export function createConversationMemory({ store, memory }) {
+  async function initialize(db, patientId, userId, value) {
+    // Called only in the NEW profile transaction. Never apply a new default
+    // during login, restore, workspace reads, or deployment of existing users.
+    await db.run('INSERT INTO conversation_memory_settings (patient_id,user_id,enabled,updated_at) VALUES (?,?,?,?)', patientId, userId, Number(value), stamp());
+    await db.audit(userId, patientId, value ? 'conversation_memory.signup_enabled' : 'conversation_memory.signup_opted_out');
+  }
   const enabled = async (patientId, userId, db = store) => Boolean((await db.get('SELECT enabled FROM conversation_memory_settings WHERE patient_id=? AND user_id=?', patientId, userId))?.enabled);
   async function state(patientId, userId) {
     const rows = await store.all('SELECT * FROM conversation_memories WHERE patient_id=? AND user_id=? ORDER BY created_at DESC,part ASC LIMIT 200', patientId, userId);
@@ -72,5 +78,5 @@ export function createConversationMemory({ store, memory }) {
     }));
     return state(patientId, userId);
   }
-  return { enabled, state, setEnabled, queue, sync };
+  return { initialize, enabled, state, setEnabled, queue, sync };
 }

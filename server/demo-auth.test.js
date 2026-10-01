@@ -34,9 +34,9 @@ async function harness(t) {
       if (json.csrfToken) state.csrf = json.csrfToken;
       return { status: response.status, body: json, headers: response.headers };
     };
-    state.create = async (username = 'synthetic_user', role = 'patient') => {
+    state.create = async (username = 'synthetic_user', role = 'patient', options = {}) => {
       await state.request('GET', '/api/session');
-      const created = await state.request('POST', '/api/auth/demo', { username, role });
+      const created = await state.request('POST', '/api/auth/demo', { username, role, automaticMemory: false, ...options });
       assert.equal(created.status, 201, JSON.stringify(created.body));
       return created;
     };
@@ -47,6 +47,48 @@ async function harness(t) {
 }
 const patientUrl = (patient, route) => `/api/patients/${patient.id}/${route}`;
 const chatRequest = (message, extra = {}) => ({ message, requestId: randomUUID(), ...extra });
+
+test('new demo profiles default memory on, save the first exchange, and preserve a later opt-out across restore', async t => {
+  const app = await harness(t), client = app.client();
+  const created = await client.create('default_on_demo', 'patient', { automaticMemory: undefined });
+  const patient = await client.patient(), route = suffix => patientUrl(patient, suffix);
+  const initial = (await client.request('GET', route('workspace'))).body;
+  assert.equal(initial.conversationMemory.enabled, true);
+  assert.equal(patient.memoryConsent, false, 'Reviewed care-team notes remain a separate setting.');
+  const reply = await client.request('POST', route('chat'), chatRequest('Fictional first exchange, automatically archived.'));
+  assert.equal(reply.body.conversationMemory.counts.queued, 1);
+  const saved = await client.request('POST', route('conversation-memory/sync'), {});
+  assert.equal(saved.body.conversationMemory.counts.stored, 1);
+  assert.equal(saved.body.conversationMemory.records[0].blobId, 'test-demo-blob');
+  await client.request('PATCH', route('conversation-memory/consent'), { enabled: false });
+  await client.request('POST', route('conversation/reset'), {});
+  const other = app.client();
+  await other.request('GET', '/api/session');
+  assert.equal((await other.request('POST', '/api/auth/demo/restore', { username: 'default_on_demo', recoveryCode: created.body.recoveryCode, automaticMemory: true })).status, 200);
+  const restored = (await other.request('GET', route('workspace'))).body;
+  assert.equal(restored.conversationMemory.enabled, false, 'Restore must never re-enable an opted-out profile.');
+  assert.equal(restored.conversationMemory.counts.stored, 1);
+  assert.deepEqual(restored.messages, []);
+  const after = await other.request('POST', route('chat'), chatRequest('No upload while paused.'));
+  assert.equal(after.body.conversationMemory.records.length, 1);
+  assert.equal(after.body.conversationMemory.counts.queued, 0);
+});
+
+test('sign-up opt-out and legacy profiles stay off, and non-boolean preferences are rejected', async t => {
+  const app = await harness(t), client = app.client();
+  const created = await client.create('opt_out_demo', 'patient', { automaticMemory: false });
+  const patient = await client.patient(), route = suffix => patientUrl(patient, suffix);
+  assert.equal((await client.request('GET', route('workspace'))).body.conversationMemory.enabled, false);
+  // Simulate an account from before automatic settings existed.
+  await app.store.run('DELETE FROM conversation_memory_settings WHERE patient_id=? AND user_id=?', patient.id, created.body.user.id);
+  assert.equal((await client.request('GET', route('workspace'))).body.conversationMemory.enabled, false);
+  await client.request('POST', route('chat'), chatRequest('Legacy profile must not be silently opted in.'));
+  assert.equal((await client.request('GET', route('workspace'))).body.conversationMemory.records.length, 0);
+  for (const automaticMemory of ['false', 1, null, {}]) {
+    const response = await client.request('POST', '/api/auth/demo', { username: 'invalid_pref', automaticMemory });
+    assert.equal(response.status, 400);
+  }
+});
 
 test('a demo handle creates an isolated unverified workspace and a once-only hashed recovery credential', async t => {
   const app = await harness(t), first = app.client(), second = app.client();

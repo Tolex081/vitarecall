@@ -88,7 +88,7 @@ function browser(app) {
   state.register = async (name, role = 'patient', extras = {}) => {
     assert.equal((await state.request('GET', '/api/session')).status, 200);
     const result = await state.request('POST', '/api/auth/register', {
-      name, email: `${name.toLowerCase()}@example.test`, password: PASSWORD, role,
+      name, email: `${name.toLowerCase()}@example.test`, password: PASSWORD, role, automaticMemory: false,
       ...(role === 'clinician' ? { inviteCode: INVITE } : {}), ...extras,
     });
     assert.equal(result.status, 201, JSON.stringify(result.body));
@@ -152,7 +152,7 @@ test('background work rechecks consent, and explicit earlier-chat archiving also
   assert.equal(state.counts.cancelled, 1);
 });
 
-test('automatic memory is opt-in, saves full exchanges once, and recalls after clear without local history', async t => {
+test('an opted-out profile requires enabling automatic memory, saves full exchanges once, and recalls after clear', async t => {
   const app = await harness(t);
   const { client, patient } = await patientSetup(app);
   const route = suffix => patientPath(patient, suffix);
@@ -293,6 +293,21 @@ function sameSession(app, client) {
 
 const memoryRequest = (text = 'Patient prefers an afternoon appointment.') => ({ text, requestId: randomUUID() });
 const chatRequest = (message = 'Help prepare questions for my visit.') => ({ message, requestId: randomUUID() });
+
+test('new email patient accounts default automatic memory on and retain opt-out after signing in', async t => {
+  const app = await harness(t), client = browser(app);
+  await client.register('Defaultpatient', 'patient', { automaticMemory: undefined });
+  const patient = await client.patient();
+  assert.equal((await client.request('GET', workspacePath(patient))).body.conversationMemory.enabled, true);
+  const reply = await client.request('POST', patientPath(patient, 'chat'), chatRequest('Fictional first email-profile chat.'));
+  assert.equal(reply.body.conversationMemory.counts.queued, 1);
+  await client.request('PATCH', patientPath(patient, 'conversation-memory/consent'), { enabled: false });
+  await client.request('POST', '/api/auth/logout', {});
+  await client.request('POST', '/api/auth/login', { email: 'defaultpatient@example.test', password: PASSWORD, automaticMemory: true });
+  const state = (await client.request('GET', workspacePath(patient))).body.conversationMemory;
+  assert.equal(state.enabled, false);
+  assert.equal(state.counts.cancelled, 1);
+});
 const workspacePath = (p) => `/api/patients/${p.id}/workspace`;
 const patientPath = (p, suffix) => `/api/patients/${p.id}/${suffix}`;
 const deferred = () => {

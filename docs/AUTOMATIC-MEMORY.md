@@ -1,13 +1,15 @@
 # Automatic conversation memory
 
-Vita automatically archives complete new exchanges (both the user message and the AI reply) after one-time consent. There is no per-message save button. This is an explicitly opted-in fictional-data pilot, not a clinical-record system.
+Vita automatically archives complete new exchanges (both the user message and the AI reply). For new demo and patient profiles, automatic memory is **on by default**, with a visible sign-up disclosure and a checked option that can be unchecked before continuing. There is no per-message save button. This remains a fictional-data pilot, not a clinical-record system.
+
+Existing profiles keep their current setting. Login, restore, a new conversation, and an app update never turn an explicit off choice back on. Legacy profiles with no automatic-memory setting also remain off; reviewed-note consent is not treated as permission to upload whole transcripts. This release changes new-profile initialization, not historical records, and needs no database migration.
 
 ## Try it
 
 1. Restore the same demo profile with its username and private recovery code.
-2. On desktop, use the automatic-memory panel beside Chat with Vita. On phones, tap **Walrus memory** above the conversation (or the **Memory** tab). Read the disclosure and select **Enable automatic memory**.
+2. New profiles already have automatic memory on unless you unchecked it at sign-up. On desktop, inspect the panel beside Chat with Vita; on phones, tap **Walrus memory** or **Memory**. You can pause/resume here or in **Settings**. If restoring an older or opted-out profile, its previous setting is preserved.
 3. Share a fictional name, a concern, and a useful preference. Ask a practical question.
-4. Wait for confirmed chat parts. In **Patient memory**, expand **Chat archive receipts** to see the actual job and full mainnet blob IDs. A queued or processing part is not proof of storage.
+4. Wait for confirmed chat parts. In **Patient memory**, expand **Chat archive receipts** to see the actual job and full mainnet blob IDs. **View blob on Walrus Scan** opens `https://walruscan.com/mainnet/blob/<full-blob-id>`. Recalled sources link to the same explorer. A queued or processing part is not proof of storage; explorer indexing may lag, and the encrypted blob is not a readable chat transcript.
 5. Select **New conversation**. Ask what Vita remembers without repeating the detail. Inspect the reply's Walrus source IDs and **No previous chat history sent** trace.
 6. Restore this profile in another browser and repeat. A new demo username creates an isolated profile; it cannot recover this memory.
 

@@ -38,7 +38,7 @@ for (const [width, height] of [[320, 568], [390, 844], [430, 932]]) {
     const memory = page.getByRole('region', { name: 'Automatic conversation memory' });
     await expect(memory).toBeVisible();
     await expect(memory).toContainText('processes plaintext before encryption');
-    await memory.getByRole('button', { name: 'Enable automatic memory' }).click();
+    await expect(memory.getByRole('button', { name: 'Pause automatic memory' })).toBeVisible();
     await mobileNav(page, 'Chat with Vita').click();
     await expect(page.getByLabel('Message Vita')).toHaveValue('Unsent fictional draft');
     await expect(page.getByRole('button', { name: 'Open memory settings' })).toContainText('auto on');

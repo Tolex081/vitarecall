@@ -10,7 +10,7 @@ You are Tunde, 45. In this story, a clinician diagnosed type 2 diabetes two year
 
 Open the coordinator's public URL. Choose **Try the demo -> Patient** and a fictional handle such as `vita_test_p2`. Privately save the recovery code. This is a demo profile, not verified X login. Hide the code before screenshots and keep using the same profile.
 
-Before this session, open **Walrus memory** (or **Patient memory**), read the disclosure, and select **Enable automatic memory** once. Every new completed exchange is then queued, including your messages and Vita replies. No per-message save is needed. The archive is a fictional transcript; AI-generated advice is not a verified clinical record.
+Read the sign-up disclosure: **Save chats to Walrus automatically** is checked by default for new profiles. Leave it on for this memory test, or opt out before chatting if you do not want uploads. Restored profiles keep their previous setting; inspect **Walrus memory** or **Settings** and resume if needed. Each new completed exchange is queued automatically, including Vita replies. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
 
 ## Day 1 - conversation and practical questions
 

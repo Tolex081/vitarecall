@@ -42,6 +42,11 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
   app.use("/api", sessions.load);
   const coordination = createCoordination(store);
   const conversationMemory = createConversationMemory({ store, memory });
+  function initialAutomaticMemory(value) {
+    if (value === undefined) return true;
+    if (typeof value !== 'boolean') fail(400, 'Automatic memory must be true or false.');
+    return value;
+  }
   function startConversationSync(req, patient, state) {
     if (!runInBackground || !memory.configured || patient.user_id !== req.user.id || !(state.counts.queued + state.counts.processing)) return;
     try { runInBackground(() => conversationMemory.sync(patient.id, req.user.id), req.memorySyncDeadline); }
@@ -87,6 +92,7 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
   }
   app.post("/api/auth/demo", async (req, res) => {
     const username = demoUsername(req.body.username);
+    const automaticMemory = initialAutomaticMemory(req.body.automaticMemory);
     const role = req.body.role ?? "patient";
     if (!["patient", "clinician"].includes(role)) fail(400, "Choose patient or clinician.");
     // A public handle is a display label, never an authentication credential.
@@ -97,7 +103,9 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     await store.transaction(async tx => {
       await tx.run("INSERT INTO users VALUES (?,?,?,?,?,?)", id, `@${username}`, `${id}@demo.invalid`, passwordHash, role, createdAt);
       await tx.run("INSERT INTO demo_profiles VALUES (?,?,?,?)", id, username, hash(recoveryCode), createdAt);
-      await tx.run("INSERT INTO patients (id,user_id,care_code) VALUES (?,?,?)", randomUUID(), id, randomBytes(10).toString("hex").toUpperCase());
+      const patientId = randomUUID();
+      await tx.run("INSERT INTO patients (id,user_id,care_code) VALUES (?,?,?)", patientId, id, randomBytes(10).toString("hex").toUpperCase());
+      await conversationMemory.initialize(tx, patientId, id, automaticMemory);
       await tx.audit(id, null, "demo.created");
     });
     await sessions.create(req, res, id);
@@ -113,6 +121,7 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     res.json(sessionPayload(req));
   });
   app.post("/api/auth/register", async (req, res) => {
+    const automaticMemory = initialAutomaticMemory(req.body.automaticMemory);
     const name = input(req.body.name, "Name", 80, 2);
     const email = input(req.body.email, "Email", 254, 3).toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "Enter a valid email address.");
@@ -127,7 +136,11 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     try {
       await store.transaction(async tx => {
         await tx.run("INSERT INTO users VALUES (?,?,?,?,?,?)", id, name, email, passwordHash, role, now());
-        if (role === "patient") await tx.run("INSERT INTO patients (id,user_id,care_code) VALUES (?,?,?)", randomUUID(), id, randomBytes(10).toString("hex").toUpperCase());
+        if (role === "patient") {
+          const patientId = randomUUID();
+          await tx.run("INSERT INTO patients (id,user_id,care_code) VALUES (?,?,?)", patientId, id, randomBytes(10).toString("hex").toUpperCase());
+          await conversationMemory.initialize(tx, patientId, id, automaticMemory);
+        }
       });
     } catch (error) {
       if (error.code === "23505" || (typeof error.code === "string" && error.code.includes("CONSTRAINT"))) fail(409, "Unable to create this account. Try signing in instead.");
@@ -389,7 +402,7 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     const rid = requestId(req.body.requestId);
     const existing = await store.get("SELECT * FROM memories WHERE patient_id=? AND user_id=? AND request_id=?", p.id, req.user.id, rid);
     if (existing) return res.json({ memory: toMemory(existing) });
-    if (!p.memory_consent) fail(403, "The patient must enable Walrus Memory in settings before a memory can be saved.", "CONSENT_REQUIRED");
+    if (!p.memory_consent) fail(403, "Enable reviewed memory saves in Settings before saving a care-team note. This is separate from automatic chat memory.", "CONSENT_REQUIRED");
     if (!memory.configured) fail(503, "Walrus Memory is not connected yet. Configure the account and delegate key on the server.", "MEMORY_NOT_CONFIGURED");
     const id = randomUUID();
     const namespace = `vitarecall:patient:${p.id}`;

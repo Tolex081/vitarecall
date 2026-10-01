@@ -8,7 +8,7 @@ See whether Vita recalls useful patient-reported context after the chat is clear
 
 Use the organiser's deployed website for about 15 minutes on day 1 and 5–10 minutes on days 2 and 3. Choose **Patient** and a unique demo handle such as `maya_test_05`. The handle is a demo label, not verified X sign-in. Save your private recovery code securely; never paste it into chat or published evidence. Return using the same account, or **Restore demo** with the code on another device.
 
-Before this session, open **Walrus memory** (or **Patient memory**), read the disclosure, and select **Enable automatic memory** once. Every new completed exchange is then queued, including your messages and Vita replies. No per-message save is needed. The archive is a fictional transcript; AI-generated advice is not a verified clinical record.
+Read the sign-up disclosure: **Save chats to Walrus automatically** is checked by default for new profiles. Leave it on for this memory test, or opt out before chatting if you do not want uploads. Restored profiles keep their previous setting; inspect **Walrus memory** or **Settings** and resume if needed. Each new completed exchange is queued automatically, including Vita replies. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
 
 ## Day 1 — get to know Vita
 

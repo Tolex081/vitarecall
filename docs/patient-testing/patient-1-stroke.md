@@ -10,7 +10,7 @@ You are Ada, 58. In this story, a clinician diagnosed a stroke six months ago. Y
 
 Use the coordinator's deployed link. Select **Try the demo -> Patient**, enter a fictional handle such as `vita_test_p1`, and privately save the recovery code. A handle is not verified X identity. Do not show the code in evidence. Use this same profile for every visit.
 
-Before this session, open **Walrus memory** (or **Patient memory**), read the disclosure, and select **Enable automatic memory** once. Every new completed exchange is then queued, including your messages and Vita replies. No per-message save is needed. The archive is a fictional transcript; AI-generated advice is not a verified clinical record.
+Read the sign-up disclosure: **Save chats to Walrus automatically** is checked by default for new profiles. Leave it on for this memory test, or opt out before chatting if you do not want uploads. Restored profiles keep their previous setting; inspect **Walrus memory** or **Settings** and resume if needed. Each new completed exchange is queued automatically, including Vita replies. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
 
 ## Day 1 - first appointment-style conversation
 
