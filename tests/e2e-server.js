@@ -31,7 +31,7 @@ const fixtureMemory = {
   async recall(_query, namespace) { return [...records.values()].filter(record => record.namespace === namespace).map(record => ({ blobId: record.blobId, text: record.text, createdAt: new Date().toISOString(), distance: 0.1 })); },
   async verify() { return { connected: true, network: "mainnet", accountId: this.accountId }; },
 };
-const fixtureChat = { configured: true, model: "test-only-provider-fixture", async respond({ memories }) { return memories.length ? `Test-provider reply using stored context: ${memories[0].text} [1]` : "Test-provider reply: no remembered context yet."; } };
+const fixtureChat = { configured: true, model: "test-only-provider-fixture", async respond({ memories, message }) { if (message === "UI-only long mobile layout fixture") return "Layout fixture only.\n\n" + Array.from({ length: 20 }, (_, i) => `${i + 1}. **Prepare a question:** Write down a fictional topic to discuss at your next appointment.`).join("\n"); return memories.length ? `Test-provider reply using stored context: ${memories[0].text} [1]` : "Test-provider reply: no remembered context yet."; } };
 const fixtureServer = createApp({ config: { ...config, appOrigin: "http://127.0.0.1:3188" }, store: fixtureStore, memory: fixtureMemory, chat: fixtureChat }).listen(3188, "127.0.0.1");
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, async () => {
   server.closeAllConnections(); fixtureServer.closeAllConnections();

@@ -68,7 +68,7 @@ test("mobile chat is easy to find and the page fits the screen", async ({ page }
   await nav(page, "Settings", true).click();
   await expect(page.getByRole("heading", { name: "Memory & privacy", exact: true })).toBeVisible();
   await nav(page, "Chat with Vita", true).click();
-  await page.getByText("What do you remember about my care preferences?", { exact: true }).click();
+  await page.getByRole("button", { name: "What do you remember about my care preferences?", exact: true }).click();
   await expect(page.getByLabel("Message Vita", { exact: true })).toHaveValue("What do you remember about my care preferences?");
 });
 

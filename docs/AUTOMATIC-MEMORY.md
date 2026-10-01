@@ -5,7 +5,7 @@ Vita can archive complete exchanges (the user's message and the AI reply), not j
 ## Try it
 
 1. Restore the same demo profile with its username and private recovery code.
-2. In Chat with Vita, read the disclosure and select **Enable automatic memory**.
+2. On desktop, use the automatic-memory panel beside Chat with Vita. On phones, tap **Walrus memory** above the conversation (or the **Memory** tab). Read the disclosure and select **Enable automatic memory**.
 3. Share a fictional name, a concern, and a useful preference. Ask a practical question.
 4. Wait for confirmed chat parts. In **Patient memory**, expand **Chat archive receipts** to see the actual job and full mainnet blob IDs. A queued or processing part is not proof of storage.
 5. Select **New conversation**. Ask what Vita remembers without repeating the detail. Inspect the reply's Walrus source IDs and **No previous chat history sent** trace.

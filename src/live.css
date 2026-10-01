@@ -47,3 +47,67 @@
 .rich-message ul, .rich-message ol { padding-left: 20px; margin: 10px 0; }
 .rich-message li { padding: 3px 0; }
 .rich-message h4 { font-size: 1em; margin: 14px 0 8px; }
+
+/* Phone experience: conversation first; detailed memory controls live in Memory. */
+.mobile-memory-summary, .mobile-chat-safety, .mobile-label { display: none; }
+@media (max-width: 730px) {
+  .chat-view .welcome-card, .chat-view .context-column, .chat-view .page-footer,
+  .chat-view .page-heading .eyebrow, .chat-view .page-heading > div > p,
+  .chat-panel .connection-tag, .chat-panel .desktop-memory-label,
+  .chat-panel .desktop-label, .chat-panel .composer-footnote { display: none; }
+  .mobile-label { display: inline; }
+  .chat-view .page-heading { margin: 0 0 12px; }
+  .chat-view .greeting-line { gap: 10px; }
+  .chat-view .greeting-line h1 { font-size: 21px; letter-spacing: -.5px; }
+  .chat-view .greeting-line .avatar { width: 36px; height: 36px; font-size: 13px; flex-shrink: 0; }
+  .topbar { padding: 0 16px; }
+  .sign-out-button { min-height: 44px; font-size: 11px; }
+  .chat-panel { border-radius: 17px; min-width: 0; overflow: hidden; }
+  .chat-panel .panel-heading { padding: 12px 14px; flex-shrink: 0; }
+  .chat-panel .title-with-icon p { font-size: 10px; }
+  .conversation-toolbar { padding: 3px 12px; flex-wrap: nowrap; gap: 8px; flex-shrink: 0; }
+  .conversation-toolbar > .text-button { min-height: 44px; font-size: 12px; }
+  .mobile-memory-summary { display: flex; align-items: center; gap: 7px; text-align: left; padding: 6px 0; background: transparent; border: 0; color: #326958; min-height: 44px; min-width: 0; }
+  .mobile-memory-summary span { display: grid; gap: 2px; }
+  .mobile-memory-summary strong { font-size: 11px; font-weight: 700; }
+  .mobile-memory-summary small { font-size: 10px; color: #5f766b; }
+  .chat-empty { min-height: 0; padding: 14px 4px; }
+  .chat-empty .large-vita { width: 54px; height: 54px; border-radius: 17px; margin-bottom: 10px; }
+  .chat-empty .intro-label { display: none; }
+  .chat-empty h3 { font-size: 19px; line-height: 1.35; }
+  .chat-empty > p { font-size: 12px; margin-top: 8px; line-height: 1.6; }
+  .chat-empty .suggestions { margin-top: 14px; gap: 8px; width: 100%; }
+  .chat-empty .suggestions button { min-height: 44px; font-size: 12px; padding: 10px 12px; }
+  .chat-empty .suggestions button:nth-child(3) { display: none; }
+  .chat-message { max-width: 100%; padding: 13px; margin-bottom: 14px; }
+  .message-text { font-size: 14px; line-height: 1.7; }
+  .message-byline time { font-size: 9px; }
+  .message-sources summary, .save-from-chat { min-height: 36px; }
+  .chat-composer { margin: 6px 10px 0; flex-shrink: 0; }
+  .chat-composer textarea { font-size: 16px; min-height: 70px; max-height: 110px; padding: 11px 54px 11px 12px; resize: none; }
+  .send-button { width: 42px; height: 42px; }
+  .mobile-chat-safety { display: block; flex-shrink: 0; text-align: center; color: #65776d; font-size: 10px; line-height: 1.5; padding: 7px 8px 9px; }
+  .mobile-nav { padding: 6px 8px max(7px,env(safe-area-inset-bottom)); }
+  .mobile-nav button { min-height: 48px; font-size: 10px; color: #617961; }
+  .compact-chat { height: var(--mobile-viewport-height, 100dvh); min-height: 0; overflow: hidden; }
+  .compact-chat .main-workspace { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .compact-chat .topbar { position: relative; height: 56px; flex: 0 0 56px; }
+  .compact-chat .page-content { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; padding: 10px 12px calc(74px + env(safe-area-inset-bottom)); overflow: hidden; }
+  .compact-chat .page-heading, .compact-chat .patient-picker, .compact-chat .notice { flex-shrink: 0; }
+  .compact-chat .page-content > .notice { max-height: 100px; overflow: auto; margin-bottom: 8px; }
+  .compact-chat .chat-grid { display: flex; align-items: stretch; flex: 1; min-height: 0; }
+  .compact-chat .chat-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .compact-chat .conversation { flex: 1; min-height: 0; height: auto; padding: 12px; }
+  .compact-chat.keyboard-open .topbar, .compact-chat.keyboard-open .page-heading, .compact-chat.keyboard-open .mobile-nav { display: none; }
+  .compact-chat.keyboard-open .page-content { padding: 6px 8px max(6px,env(safe-area-inset-bottom)); }
+  .memory-overview img, .memory-overview .eyebrow { display: none; }
+  .memory-overview { min-height: 0; padding: 18px; }
+  .memory-overview > div { max-width: 100%; }
+  .automatic-memory { margin: 0 0 16px; }
+  input, textarea, select { font-size: 16px; }
+  .automatic-memory .button, .form-stack .button, .search-form .button { min-height: 44px; }
+}
+@media (max-width: 730px) and (max-height: 450px) {
+  .compact-chat .page-heading { display: none; }
+  .compact-chat .panel-heading { padding: 8px 12px; }
+}

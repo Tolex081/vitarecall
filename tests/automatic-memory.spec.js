@@ -12,13 +12,17 @@ for (const [device, width] of [['desktop', 1280], ['mobile', 320]]) {
     const recovery = await page.locator('.recovery-code code').innerText();
     await page.getByRole('button', { name: "I've saved my code", exact: true }).click();
     const control = page.getByRole('region', { name: 'Automatic conversation memory', exact: true });
+    if (device === 'mobile') await page.getByRole('button', { name: 'Open memory settings', exact: true }).click();
     await expect(control.getByText('Off', { exact: true })).toBeVisible();
+    if (device === 'mobile') await page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('button', { name: 'Chat with Vita', exact: true }).click();
     await page.getByLabel('Message Vita', { exact: true }).fill('Fictional patient Mira prefers beans and short examples.');
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect(page.locator('.chat-message')).toHaveCount(2);
-    await expect(control).toContainText('0 confirmed chat parts');
+    if (device === 'mobile') await expect(page.getByRole('button', { name: 'Open memory settings' })).toContainText('0 saved');
+    else await expect(control).toContainText('0 confirmed chat parts');
     await page.getByRole('button', { name: 'New conversation', exact: true }).click();
     await expect(page.locator('.chat-message')).toHaveCount(0);
+    if (device === 'mobile') await page.getByRole('button', { name: 'Open memory settings', exact: true }).click();
     await control.getByRole('button', { name: 'Enable automatic memory', exact: true }).click();
     await expect(control.getByText('On', { exact: true })).toBeVisible();
     const nav = page.getByRole('navigation', { name: device === 'mobile' ? 'Mobile navigation' : 'Primary navigation', exact: true });
@@ -53,11 +57,14 @@ for (const [device, width] of [['desktop', 1280], ['mobile', 320]]) {
       const result = await (await response).json();
       expect(result.assistantMessage.memoryTrace).toMatchObject({ status: 'recalled', historyUsed: false, sourceCount: 1 });
       await expect(restored.locator('.chat-message.assistant')).toContainText('Mira');
-      await expect(restored.getByRole('region', { name: 'Automatic conversation memory' })).toContainText('2 confirmed chat parts on Walrus', { timeout: 20000 });
+      if (device === 'mobile') await expect(restored.getByRole('button', { name: 'Open memory settings' })).toContainText('2 saved', { timeout: 20000 });
+      else await expect(restored.getByRole('region', { name: 'Automatic conversation memory' })).toContainText('2 confirmed chat parts on Walrus', { timeout: 20000 });
       await restored.getByRole('button', { name: 'New conversation', exact: true }).click();
       await expect(restored.locator('.chat-message')).toHaveCount(0);
+      if (device === 'mobile') await restored.getByRole('button', { name: 'Open memory settings', exact: true }).click();
       await restored.getByRole('button', { name: 'Pause automatic memory', exact: true }).click();
       await expect(restored.getByRole('button', { name: 'Enable automatic memory', exact: true })).toBeVisible();
+      if (device === 'mobile') await restored.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('button', { name: 'Chat with Vita', exact: true }).click();
       await restored.screenshot({ path: `test-results/automatic-recall-${device}.png`, fullPage: true });
     } finally { await other.close(); }
   });
