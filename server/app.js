@@ -22,11 +22,12 @@ const toMemory = (m) => ({ id: m.id, text: m.text, provenance: m.provenance, sta
 const toMessage = (m) => ({ id: m.id, role: m.role, text: m.text, sources: JSON.parse(m.sources_json), createdAt: m.created_at, ...(m.trace_json ? { memoryTrace: JSON.parse(m.trace_json) } : {}) });
 const toTask = (t) => ({ id: t.id, title: t.title, completed: Boolean(t.completed), createdAt: t.created_at });
 
-export function createApp({ config, store, memory, chat }) {
+export function createApp({ config, store, memory, chat, runInBackground }) {
   const app = express();
   app.disable("x-powered-by");
   if (config.production) app.set("trust proxy", 1);
   app.use((req, res, next) => {
+    req.memorySyncDeadline = Date.now() + 120_000;
     res.set({ "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin", "Permissions-Policy": "camera=(), microphone=(), geolocation=()" });
     if (config.production) {
       res.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
@@ -41,6 +42,11 @@ export function createApp({ config, store, memory, chat }) {
   app.use("/api", sessions.load);
   const coordination = createCoordination(store);
   const conversationMemory = createConversationMemory({ store, memory });
+  function startConversationSync(req, patient, state) {
+    if (!runInBackground || !memory.configured || patient.user_id !== req.user.id || !(state.counts.queued + state.counts.processing)) return;
+    try { runInBackground(() => conversationMemory.sync(patient.id, req.user.id), req.memorySyncDeadline); }
+    catch { console.error('Automatic memory scheduling was unavailable. The chat archive remains queued.'); }
+  }
   const releaseLease = async lease => {
     try { await coordination.release(lease); }
     catch { console.error("Operation lease cleanup was unavailable; the lease will expire automatically."); }
@@ -239,7 +245,9 @@ export function createApp({ config, store, memory, chat }) {
       await tx.audit(req.user.id, p.id, 'conversation_memory.earlier_chats_requested');
       return rows.length > 10;
     });
-    res.json({ remaining, conversationMemory: await conversationMemory.state(p.id, req.user.id) });
+    const archive = await conversationMemory.state(p.id, req.user.id);
+    startConversationSync(req, p, archive);
+    res.json({ remaining, conversationMemory: archive });
   });
   app.post("/api/patients/:id/care-code", async (req, res) => {
     const p = await patientFor(req, req.params.id);
@@ -367,7 +375,9 @@ export function createApp({ config, store, memory, chat }) {
         await tx.run("UPDATE chat_requests SET state='done',response_json=? WHERE patient_id=? AND user_id=? AND request_id=?", JSON.stringify(response), p.id, req.user.id, rid);
         await tx.audit(req.user.id, p.id, "chat.completed");
       });
-      res.json({ ...response, conversationMemory: await conversationMemory.state(p.id, req.user.id) });
+      const archive = await conversationMemory.state(p.id, req.user.id);
+      startConversationSync(req, p, archive);
+      res.json({ ...response, conversationMemory: archive });
     } catch (error) {
       if (requestCreated) await store.run("UPDATE chat_requests SET state='failed' WHERE patient_id=? AND user_id=? AND request_id=? AND state='pending'", p.id, req.user.id, rid);
       throw error;

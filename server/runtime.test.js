@@ -10,14 +10,24 @@ function dependencies(store) {
 test("PostgreSQL runtime reuses the actual pool and never initializes SQLite", async () => {
   const store = { pool: {}, close: async () => {} };
   let attached = 0;
+  const work = [];
+  let background;
   const runtime = await createRuntime({ vercel: true, databaseUrl: "private-connection", databaseCaCert: "certificate" }, {
     ...dependencies(store),
     createPostgresStore: async options => { assert.deepEqual(options, { connectionString: "private-connection", ca: "certificate" }); return store; },
     createStore: () => assert.fail("SQLite must not initialize on Vercel"),
     attachDatabasePool: pool => { assert.equal(pool, store.pool); attached++; },
+    createApp: ({ runInBackground }) => { background = runInBackground; return () => {}; },
+    waitUntil: promise => work.push(promise),
+    getDeadline: () => new Date(Date.now() + 120000),
   });
   assert.equal(runtime.store, store);
   assert.equal(attached, 1);
+  let ran = false;
+  background(() => { ran = true; });
+  assert.equal(work.length, 1);
+  await work[0];
+  assert.equal(ran, true);
 });
 
 test("local runtime retains SQLite while Vercel refuses an absent DATABASE_URL", async () => {

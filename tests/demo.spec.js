@@ -127,8 +127,9 @@ test.describe("isolated demo memory fixture — no live Walrus or Gemini request
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.locator(".chat-message.assistant")).toContainText("no remembered context yet");
     await expect(page.locator(".memory-trace")).toContainText("no matching memory");
-    await page.getByRole("button", { name: "Remember this", exact: true }).click();
-    await expect(page.getByRole("textbox", { name: "Memory to save", exact: true })).toHaveValue(detail);
+    await expect(page.getByRole("button", { name: "Remember this", exact: true })).toHaveCount(0);
+    await nav(page, "Patient memory", true).click();
+    await page.getByRole("textbox", { name: "Memory to save", exact: true }).fill(detail);
     await expect(page.getByRole("button", { name: "Save reviewed memory", exact: true })).toBeDisabled();
     await page.getByRole("button", { name: "Allow reviewed memory saves", exact: true }).click();
     await page.getByRole("button", { name: "Save reviewed memory", exact: true }).click();

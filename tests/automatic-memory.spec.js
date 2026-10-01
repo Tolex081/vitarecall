@@ -18,6 +18,7 @@ for (const [device, width] of [['desktop', 1280], ['mobile', 320]]) {
     await page.getByLabel('Message Vita', { exact: true }).fill('Fictional patient Mira prefers beans and short examples.');
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect(page.locator('.chat-message')).toHaveCount(2);
+    await expect(page.getByRole('button', { name: 'Remember this', exact: true })).toHaveCount(0);
     if (device === 'mobile') await expect(page.getByRole('button', { name: 'Open memory settings' })).toContainText('0 saved');
     else await expect(control).toContainText('0 confirmed chat parts');
     await page.getByRole('button', { name: 'New conversation', exact: true }).click();

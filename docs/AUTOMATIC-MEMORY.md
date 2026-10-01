@@ -1,6 +1,6 @@
 # Automatic conversation memory
 
-Vita can archive complete exchanges (the user's message and the AI reply), not just a generated summary. This is an explicitly opted-in fictional-data pilot, not a clinical-record system.
+Vita automatically archives complete new exchanges (both the user message and the AI reply) after one-time consent. There is no per-message save button. This is an explicitly opted-in fictional-data pilot, not a clinical-record system.
 
 ## Try it
 
@@ -24,7 +24,9 @@ For older chats, including cleared ones, explicitly select **Also save earlier c
 
 The completed chat exchange and archive outbox are committed in the same database transaction. Long exchanges are split into bounded JSON envelopes without losing text; all parts need receipts to consider the entire exchange stored. AI replies are explicitly marked as AI-generated, not verified clinical facts.
 
-While the browser is open, bounded authenticated sync requests submit queued parts and check receipts. Queued work survives reload/restart and resumes when that profile is reopened. There is no always-running background worker on the free deployment: closing the tab may leave unsent work until the next visit. Transient receipt failures remain pending. Use **Refresh chat memory** if automatic polling stops.
+After a completed chat or explicit earlier-chat backfill, the server starts a bounded sync attempt without waiting for the browser to request a save. On Vercel, `waitUntil` keeps this work attached to the invocation after the response; it is not a separate durable worker. A deadline guard leaves work queued if fewer than 75 seconds remain. See the [Vercel background-task limits](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#waituntil).
+
+While the browser is open, authenticated sync requests automatically finish queued parts and check receipts. After twenty checks the interval slows from six to thirty seconds instead of requiring a manual refresh. Queued work survives reload/restart and resumes when the same profile is reopened. Closing the app can still leave work unfinished: the free deployment has no always-running worker, and platform timeouts or provider failures can interrupt delivery. The optional **Refresh chat memory** control checks status; it is not a save-per-message step.
 
 The relayer does not supply our application with a write-idempotency key. Before submitting, a database claim prevents duplicate uploads from simultaneous requests. An ambiguous timeout/crash stays **Submission unconfirmed** and is not blindly resubmitted: the operator must reconcile it with the Walrus account. A failed or unconfirmed part is not counted as stored. Never describe this as guaranteed delivery or permanent storage.
 

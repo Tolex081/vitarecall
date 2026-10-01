@@ -3,6 +3,7 @@ import { loadConfig } from "./config.js";
 import { createApp } from "./app.js";
 import { createMemoryService } from "./memory.js";
 import { createChatService } from "./llm.js";
+import { createBackgroundRunner } from "./background.js";
 
 // Create one reusable app/pool per process, never a SQLite database in /tmp.
 // Migrations are an explicit deployment step, not a cold-start side effect.
@@ -17,13 +18,19 @@ export async function createRuntime(config = loadConfig(), dependencies = {}) {
     store = await createStore(path.join(config.dataDir, "vitarecall.sqlite"));
   }
   try {
+    let platform;
     if (config.vercel) {
-      const attach = dependencies.attachDatabasePool || (await import("@vercel/functions")).attachDatabasePool;
+      platform = await import("@vercel/functions");
+      const attach = dependencies.attachDatabasePool || platform.attachDatabasePool;
       attach(store.pool);
     }
     const memory = (dependencies.createMemoryService || createMemoryService)(config);
     const chat = (dependencies.createChatService || createChatService)(config);
-    const app = (dependencies.createApp || createApp)({ config, store, memory, chat });
+    const runInBackground = createBackgroundRunner({
+      waitUntil: dependencies.waitUntil || platform?.waitUntil,
+      getDeadline: dependencies.getDeadline || platform?.getDeadline,
+    });
+    const app = (dependencies.createApp || createApp)({ config, store, memory, chat, runInBackground });
     return { app, config, store };
   } catch (error) {
     await store.close();

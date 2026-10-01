@@ -166,7 +166,7 @@ test('fresh conversations persist a transcript boundary while recalling actual p
   assert.equal(Number((await app.store.get('SELECT COUNT(*) AS count FROM messages')).count), 8, 'Fresh conversations do not erase stored transcripts.');
   assert.equal(app.calls.recall.length, 4);
   assert.ok(app.calls.recall.every(call => call.namespace === `vitarecall:patient:${patient.id}`));
-  assert.equal(app.calls.submit.length, 0, 'Chat never automatically saves memory.');
+  assert.equal(app.calls.submit.length, 0, 'Chat must not save automatically without automatic-memory consent.');
   const reset = await client.request('POST', patientUrl(patient, 'conversation/reset'), {});
   assert.equal(reset.status, 200);
   assert.deepEqual((await client.request('GET', patientUrl(patient, 'workspace'))).body.messages, []);

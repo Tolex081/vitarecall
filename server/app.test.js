@@ -40,11 +40,11 @@ function fakeServices() {
   return { memory, chat, calls, receipts };
 }
 
-async function harness(t, { filename = ':memory:', services = fakeServices() } = {}) {
+async function harness(t, { filename = ':memory:', services = fakeServices(), runInBackground } = {}) {
   const state = { store: null, server: null, base: null, ...services };
   async function start() {
     state.store = await createTestStore(filename);
-    const app = createApp({ config: testConfig, store: state.store, memory: services.memory, chat: services.chat });
+    const app = createApp({ config: testConfig, store: state.store, memory: services.memory, chat: services.chat, runInBackground });
     state.server = await new Promise((resolve) => {
       const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
     });
@@ -107,6 +107,50 @@ async function patientSetup(app, name = 'Alice') {
   await client.register(name);
   return { client, patient: await client.patient() };
 }
+
+test('server starts automatic storage without a browser sync request, including after chat is cleared', async t => {
+  const scheduled = [];
+  const app = await harness(t, { runInBackground: (task, deadline) => { assert.ok(deadline > Date.now()); scheduled.push(task); } });
+  const { client, patient } = await patientSetup(app);
+  const route = suffix => patientPath(patient, suffix);
+  await client.request('POST', route('chat'), chatRequest('Before consent: do not upload.'));
+  assert.equal(scheduled.length, 0);
+  await client.request('PATCH', route('conversation-memory/consent'), { enabled: true });
+  const request = chatRequest('Fictional full exchange automatically saved.');
+  const reply = await client.request('POST', route('chat'), request);
+  assert.equal(reply.status, 200);
+  assert.equal(reply.body.conversationMemory.counts.queued, 1);
+  assert.equal(scheduled.length, 1);
+  assert.equal(app.calls.submit.length, 0, 'chat response does not wait for Walrus');
+  assert.equal((await client.request('POST', route('conversation/reset'), {})).status, 200);
+  app.memory.receipt = async () => ({ status: 'stored', blobId: 'server-background-fixture-blob' });
+  await scheduled.shift()();
+  const workspace = await client.request('GET', workspacePath(patient));
+  assert.equal(workspace.body.messages.length, 0);
+  assert.equal(workspace.body.conversationMemory.counts.stored, 1);
+  assert.equal(workspace.body.conversationMemory.records[0].blobId, 'server-background-fixture-blob');
+  assert.equal(app.calls.submit.length, 1);
+  assert.match(app.calls.submit[0].text, /Fictional full exchange automatically saved/);
+  assert.match(app.calls.submit[0].text, /Vita AI-generated/);
+  await client.request('POST', route('chat'), request);
+  assert.equal(app.calls.submit.length, 1, 'retrying a completed chat cannot duplicate its archive');
+});
+
+test('background work rechecks consent, and explicit earlier-chat archiving also starts automatically', async t => {
+  const scheduled = [];
+  const app = await harness(t, { runInBackground: task => scheduled.push(task) });
+  const { client, patient } = await patientSetup(app);
+  const route = suffix => patientPath(patient, suffix);
+  await client.request('POST', route('chat'), chatRequest('Fictional earlier exchange.'));
+  await client.request('PATCH', route('conversation-memory/consent'), { enabled: true });
+  assert.equal((await client.request('POST', route('conversation-memory/backfill'), {})).status, 200);
+  assert.equal(scheduled.length, 1);
+  await client.request('PATCH', route('conversation-memory/consent'), { enabled: false });
+  await scheduled.shift()();
+  assert.equal(app.calls.submit.length, 0);
+  const state = (await client.request('GET', workspacePath(patient))).body.conversationMemory;
+  assert.equal(state.counts.cancelled, 1);
+});
 
 test('automatic memory is opt-in, saves full exchanges once, and recalls after clear without local history', async t => {
   const app = await harness(t);
@@ -427,7 +471,7 @@ test('chat idempotency preserves one exchange and retrieval uses only the author
   assert.equal(app.calls.recall.length, 1);
   assert.equal(app.calls.recall[0].namespace, `vitarecall:patient:${patient.id}`);
   assert.equal(app.calls.chat[0].role, 'patient');
-  assert.equal(app.calls.submit.length, 0, 'Chat must never save memory automatically.');
+  assert.equal(app.calls.submit.length, 0, 'Chat must not save automatically without automatic-memory consent.');
   assert.equal((await client.request('GET', workspacePath(patient))).body.messages.length, 2);
 });
 
