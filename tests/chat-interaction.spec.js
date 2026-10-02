@@ -153,3 +153,29 @@ test('a confirmed provider failure can be retried after another exchange without
   await expect(page.locator('.chat-message')).toHaveCount(4);
   await expect(page.locator('.chat-message.user').last()).toContainText(failedText);
 });
+
+test('phone keyboard resize keeps the latest reply visible without displacing an older reading position', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await start(page);
+  await composer(page).fill('UI-only long mobile layout fixture');
+  await send(page).click();
+  await expect(page.locator('.chat-message.assistant')).toHaveCount(1);
+  const conversation = page.locator('.conversation');
+  const bottomGap = () => conversation.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop);
+  await expect.poll(bottomGap).toBeLessThan(3);
+  await composer(page).focus();
+  await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => 380 });
+    window.visualViewport.dispatchEvent(new Event('resize'));
+  });
+  await expect(page.locator('.app-shell')).toHaveClass(/keyboard-open/);
+  await expect.poll(bottomGap).toBeLessThan(3);
+  await conversation.evaluate(el => { el.scrollTop = 90; el.dispatchEvent(new Event('scroll')); });
+  await page.evaluate(() => {
+    document.activeElement.blur();
+    delete window.visualViewport.height;
+    window.visualViewport.dispatchEvent(new Event('resize'));
+  });
+  await expect(page.locator('.app-shell')).not.toHaveClass(/keyboard-open/);
+  await expect.poll(() => conversation.evaluate(el => el.scrollTop)).toBeCloseTo(90, 0);
+});

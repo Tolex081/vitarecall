@@ -9,6 +9,10 @@ export function useConversationScroll({ scopeKey, active, lastMessageId, waiting
 
   function onScroll(event) {
     const node = event.currentTarget;
+    // Layout-driven scroll events during keyboard/viewport resizing are not
+    // evidence that the reader deliberately left the bottom. Let the resize
+    // observer preserve the pre-resize reading intent first.
+    if (node.clientHeight !== position.current.height || node.clientWidth !== position.current.width) return;
     position.current.top = node.scrollTop;
     position.current.follow = node.scrollHeight - node.clientHeight - node.scrollTop < 72;
     if (position.current.follow) setHasNewMessages(false);
@@ -44,6 +48,19 @@ export function useConversationScroll({ scopeKey, active, lastMessageId, waiting
     }
     state.lastMessageId = lastMessageId;
     state.active = true;
+    state.height = node.clientHeight;
+    state.width = node.clientWidth;
+
+    const resized = () => {
+      if (state.height === node.clientHeight && state.width === node.clientWidth) return;
+      state.height = node.clientHeight;
+      state.width = node.clientWidth;
+      node.scrollTop = state.follow ? node.scrollHeight : state.top;
+      state.top = node.scrollTop;
+    };
+    const observer = new ResizeObserver(resized);
+    observer.observe(node);
+    return () => observer.disconnect();
   }, [scopeKey, active, lastMessageId, waiting]);
 
   return { conversationRef, onScroll, followNextMessage, jumpToLatest, hasNewMessages };
