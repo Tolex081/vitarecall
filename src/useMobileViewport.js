@@ -18,7 +18,10 @@ export function useMobileViewport(active) {
           return;
         }
         const height = viewport?.height || window.innerHeight;
-        document.documentElement.style.setProperty('--mobile-viewport-height', `${Math.round(height)}px`);
+        const nextHeight = `${Math.round(height)}px`;
+        if (document.documentElement.style.getPropertyValue('--mobile-viewport-height') !== nextHeight) {
+          document.documentElement.style.setProperty('--mobile-viewport-height', nextHeight);
+        }
         const editing = document.activeElement?.matches('input, textarea');
         if (!editing) unfocusedHeight = height;
         setKeyboardOpen(Boolean(editing && Math.max(unfocusedHeight, window.innerHeight) - height > 120));

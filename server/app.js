@@ -340,12 +340,15 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     if (!chat.configured) fail(503, "Gemini is not connected yet. Add GEMINI_API_KEY on the server.", "LLM_NOT_CONFIGURED");
     const existing = await store.get("SELECT * FROM chat_requests WHERE patient_id=? AND user_id=? AND request_id=?", p.id, req.user.id, rid);
     if (existing?.state === "done") return res.json({ ...JSON.parse(existing.response_json), conversationMemory: await conversationMemory.state(p.id, req.user.id) });
-    if (existing) fail(409, "This request was already received. Refresh the conversation before retrying.");
+    if (existing && existing.state !== "failed") fail(409, "This request was already received. Refresh the conversation before retrying.");
     const lease = await coordination.acquire(`chat:${p.id}:${req.user.id}`);
     if (!lease) fail(409, "Wait for Vita's current reply before sending another message.");
     let requestCreated = false;
     try {
-      const inserted = await store.run("INSERT INTO chat_requests VALUES (?,?,?,?,?,?) ON CONFLICT(patient_id,user_id,request_id) DO NOTHING", p.id, req.user.id, rid, "pending", null, now());
+      // A confirmed failure has no committed exchange and can be retried under
+      // the same idempotency key. Never reopen an uncertain pending request or
+      // a completed request: they may already have produced a reply/archive.
+      const inserted = await store.run("INSERT INTO chat_requests VALUES (?,?,?,?,?,?) ON CONFLICT(patient_id,user_id,request_id) DO UPDATE SET state='pending',response_json=NULL,created_at=excluded.created_at WHERE chat_requests.state='failed'", p.id, req.user.id, rid, "pending", null, now());
       if (!Number(inserted.changes)) {
         const duplicate = await store.get("SELECT * FROM chat_requests WHERE patient_id=? AND user_id=? AND request_id=?", p.id, req.user.id, rid);
         if (duplicate?.state === "done") return res.json({ ...JSON.parse(duplicate.response_json), conversationMemory: await conversationMemory.state(p.id, req.user.id) });

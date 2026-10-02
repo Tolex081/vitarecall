@@ -10,6 +10,10 @@ The [public article and evidence package](https://vitarecall.vercel.app/submissi
 
 ## Testing and free deployment
 
+Chat sends appear immediately as local pending bubbles and clear the composer while Vita retrieves memory and generates its reply. You can draft the next message while waiting; sending remains single-flight. A failed/lost reply stays visible with Retry and Copy controls. Retries keep the original request ID: completed exchanges are returned once, confirmed failures may be retried under a database lock, and uncertain pending requests are not duplicated. Pending bubbles are not delivery or Walrus-storage receipts and do not survive a page reload until the server commits the exchange.
+
+Conversation scrolling follows new replies only when already near the bottom. Reading older messages keeps your position, with a Jump to latest button when a new reply arrives. Desktop wheel scrolling can continue into the surrounding page at chat boundaries; the compact phone chat retains its own scroll area. The browser interaction tests deliberately hold or drop fixture responses to test these behaviors without external model calls or mainnet writes.
+
 Start with the [five fictional patient scripts](docs/patient-testing/README.md) for structured multi-day memory tests. The [deployment guide](docs/DEPLOYMENT.md) explains the selected architecture: **Vercel Hobby hosts the frontend and API; Supabase Free stores app data in PostgreSQL; Walrus mainnet stores and recalls long-term memories**. Add the private `DATABASE_URL`, apply `npm run db:migrate`, and configure all provider keys as server-only Vercel variables. No separate backend host or `VITA_API_ORIGIN` is needed. Free tiers have usage and availability limits; a successful build is not proof of a working deployment.
 
 ## Local setup

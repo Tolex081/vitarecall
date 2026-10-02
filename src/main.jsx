@@ -5,6 +5,7 @@ import { api } from "./api";
 import ConversationMemory from "./ConversationMemory";
 import MessageText from "./MessageText";
 import { useMobileViewport } from "./useMobileViewport";
+import { useConversationScroll } from "./useConversationScroll";
 import { blobExplorerUrl } from "./memory-links";
 import clinicianImage from "./assets/vitarecall-walrus-clinician.png";
 import memoryImage from "./assets/memory-current.png";
@@ -105,7 +106,7 @@ function App() {
   const generation = useRef(0);
   const pendingChat = useRef(null);
   const pendingMemory = useRef(null);
-  const chatEnd = useRef(null);
+  const chatScroll = useConversationScroll({ scopeKey: selectedId, active: tab === "chat", lastMessageId: workspace?.messages.at(-1)?.id, waiting: Boolean(busy.chat) });
   const user = session?.user;
   const keyboardOpen = useMobileViewport(Boolean(user) && tab === "chat");
   const patient = workspace?.patient;
@@ -133,17 +134,13 @@ function App() {
   useEffect(() => {
     scope.current = selectedId;
     setWorkspace(null); setChatDraft(""); setMemoryDraft(""); setRecallResults(null); setRecallQuery(""); pendingChat.current = null; pendingMemory.current = null;
+    setBusy(b => ({ ...b, chat: false }));
     if (!selectedId) return;
     let active = true;
     setLoading(true);
     api(`/patients/${selectedId}/workspace`).then(data => { if (active) setWorkspace(data); }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [selectedId]);
-  useEffect(() => {
-    const conversation = chatEnd.current?.parentElement;
-    if (conversation && (workspace?.messages.length || busy.chat)) conversation.scrollTo({ top: conversation.scrollHeight, behavior: "smooth" });
-  }, [workspace?.messages.length, busy.chat]);
-
   async function perform(key, action) {
     const currentGeneration = generation.current;
     setBusy(b => ({ ...b, [key]: true })); setError(""); setNotice("");
@@ -222,16 +219,50 @@ function App() {
 
   async function sendChat(event) {
     event.preventDefault();
-    const text = chatDraft.trim(), id = selectedId, currentGeneration = generation.current;
-    if (!text || busy.chat || busy.newConversation || !services.chatConfigured) return;
-    if (pendingChat.current?.text !== text) pendingChat.current = { text, requestId: crypto.randomUUID() };
-    await perform("chat", async () => {
-      try {
-        const result = await api(`${base}/chat`, { method: "POST", body: { message: text, requestId: pendingChat.current.requestId } });
-        if (scope.current === id && generation.current === currentGeneration) { setWorkspace(w => w ? ({ ...w, ...(result.conversationMemory ? { conversationMemory: result.conversationMemory } : {}), messages: [...w.messages.filter(m => ![result.userMessage.id, result.assistantMessage.id].includes(m.id)), result.userMessage, result.assistantMessage] }) : w); setChatDraft(""); }
+    const text = chatDraft.trim();
+    if (!text || pendingChat.current || busy.chat || busy.newConversation || !services.chatConfigured) return;
+    const requestId = crypto.randomUUID();
+    const message = { id: `pending-${requestId}`, requestId, role: "user", text, createdAt: new Date().toISOString(), delivery: "pending" };
+    // This bubble is local pending UI, not a storage or delivery receipt.
+    chatScroll.followNextMessage();
+    setWorkspace(w => w && w.patient.id === selectedId ? { ...w, messages: [...w.messages, message] } : w);
+    setChatDraft("");
+    await deliverChat(message);
+  }
+  async function deliverChat(message) {
+    if (pendingChat.current || busy.newConversation || !services.chatConfigured) return;
+    const attempt = { requestId: message.requestId, patientId: selectedId, generation: generation.current };
+    pendingChat.current = attempt; // Synchronous guard against double taps.
+    const current = () => pendingChat.current === attempt && scope.current === attempt.patientId && generation.current === attempt.generation;
+    setBusy(b => ({ ...b, chat: true })); setError(""); setNotice("");
+    setWorkspace(w => w && w.patient.id === attempt.patientId ? { ...w, messages: w.messages.map(m => m.id === message.id ? { ...m, delivery: "pending", deliveryError: "" } : m) } : w);
+    try {
+      const result = await api(`/patients/${attempt.patientId}/chat`, { method: "POST", body: { message: message.text, requestId: attempt.requestId } });
+      if (!current()) return;
+      setWorkspace(w => {
+        if (!w || w.patient.id !== attempt.patientId) return w;
+        const resultIds = [result.userMessage.id, result.assistantMessage.id];
+        const hadPending = w.messages.some(m => m.id === message.id);
+        const messages = w.messages.flatMap(m => m.id === message.id ? [result.userMessage, result.assistantMessage] : resultIds.includes(m.id) ? [] : [m]);
+        if (!hadPending) messages.push(result.userMessage, result.assistantMessage);
+        // An older failed bubble may be retried after a later exchange. Match
+        // the server's actual chronology, including cached lost responses.
+        messages.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        return { ...w, ...(result.conversationMemory ? { conversationMemory: result.conversationMemory } : {}), messages };
+      });
+      // Do not clear a new draft the user typed while waiting for this reply.
+    } catch (e) {
+      if (!current()) return;
+      setWorkspace(w => w && w.patient.id === attempt.patientId ? { ...w, messages: w.messages.map(m => m.id === message.id ? { ...m, delivery: "failed", deliveryError: e.message } : m) } : w);
+      // Retrying retains the original request ID, even after a lost response.
+      // The server can return the existing exchange without duplicating it.
+      if (e.status === 401) await boot();
+    } finally {
+      if (pendingChat.current === attempt) {
         pendingChat.current = null;
-      } catch (e) { if (e.status) pendingChat.current = null; throw e; }
-    });
+        if (scope.current === attempt.patientId && generation.current === attempt.generation) setBusy(b => ({ ...b, chat: false }));
+      }
+    }
   }
   async function saveMemory(event) {
     event.preventDefault(); const text = memoryDraft.trim(), id = selectedId;
@@ -290,16 +321,19 @@ function App() {
               <div className="panel-heading"><div className="title-with-icon"><VitaAvatar /><div><h2>Chat with Vita</h2><p>Your walrus care companion · AI, not a doctor</p></div></div><span className={services.chatConfigured ? "connection-tag" : "connection-tag pending"}><i />{services.chatConfigured ? "Gemini configured" : "Setup needed"}</span></div>
               <div className="conversation-toolbar"><button className="mobile-memory-summary" aria-label="Open memory settings" onClick={() => changeTab("memory")}><Database size={15} /><span><strong>Walrus memory</strong><small aria-live="polite">{services.memoryConfigured ? mobileMemoryStatus : "Setup needed"}</small></span><ChevronRight size={14} /></button><span className="desktop-memory-label"><Database size={13} />Walrus memory, with receipts</span><button className="text-button" aria-label="New conversation" onClick={newConversation} disabled={busy.chat || busy.newConversation || !workspace.messages.length}>{busy.newConversation ? <Spinner /> : <Plus size={14} />}<span className="desktop-label">New conversation</span><span className="mobile-label">New chat</span></button></div>
               {!services.chatConfigured && <div className="chat-setup"><strong>Vita needs its Gemini key before it can reply.</strong><p>Get a key from <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noreferrer">Google AI Studio</a>, add it as <code>GEMINI_API_KEY</code> in the server's <code>.env</code>, then restart the server. Your Walrus account ID is a different setting.</p><button className="text-button" onClick={refreshConnections} disabled={busy.refreshConnections}><RefreshCw size={13} />Refresh connection status</button></div>}
-              <div className="conversation" role="log" aria-live="polite" aria-label="Conversation messages">
+              <div className="conversation" ref={chatScroll.conversationRef} onScroll={chatScroll.onScroll} role="log" aria-live="polite" aria-label="Conversation messages">
                 {workspace.messages.length === 0 ? <div className="chat-empty"><VitaAvatar large /><span className="intro-label">A welcome from Vita · not an AI reply</span><h3>Hi, I'm Vita. I'm here to listen.</h3><p>{isPatient ? "What would you like me to call you, and what brings you here today? We can take it one step at a time." : "Which fictional patient are we discussing, and what would you like help preparing? We can take it one step at a time."}</p><div className="suggestions">{["You can call me Ada. I'm a little nervous about my next appointment.", "What do you remember about my care preferences?", "Help me explain a concern to my care team"].map((text, index) => <button key={text} aria-label={text} onClick={() => { setChatDraft(text); document.getElementById("chat-input")?.focus(); }}><span className="desktop-label">{text}</span><span className="mobile-label">{["Talk about a concern", "Recall my preferences", "Prepare for a visit"][index]}</span><ArrowRight size={14} /></button>)}</div></div> : workspace.messages.map(message => <article className={"chat-message " + message.role} key={message.id}>
                   <div className="message-byline">{message.role === "assistant" ? <><VitaAvatar /> Vita</> : <><Avatar user={user} small />You</>}<time>{date(message.createdAt)}</time></div>
                   {message.role === "assistant" ? <MessageText text={message.text} /> : <div className="message-text">{message.text}</div>}
+                  {message.delivery === "pending" && <small className="message-delivery" role="status">Waiting for Vita’s reply…</small>}
+                  {message.delivery === "failed" && <div className="message-delivery failed" role="alert"><strong>Reply not confirmed.</strong><p>{message.deliveryError}</p><button type="button" className="text-button" disabled={busy.chat || busy.newConversation} onClick={() => { chatScroll.followNextMessage(); deliverChat(message); }}><RefreshCw size={13} />Retry message</button><CopyButton value={message.text} label="Copy message" /></div>}
                   {message.role === "assistant" && <MemoryTrace trace={message.memoryTrace} />}
                   {message.sources?.length > 0 && <details className="message-sources"><summary><BookIcon />{message.sources.length} retrieved memory source{message.sources.length === 1 ? "" : "s"}</summary><p>Retrieved from Walrus and supplied as context. Retrieval alone does not mean every source was used; citation numbers in the reply identify cited sources.</p>{message.sources.map((source, index) => <div key={source.blobId + "-" + index}><strong>[{index + 1}] Saved context</strong><p>{source.text}</p><code>{source.blobId}</code><a className="text-button" href={blobExplorerUrl(source.blobId)} target="_blank" rel="noreferrer">View source on Walrus Scan</a></div>)}</details>}
                 </article>)}
-                {busy.chat && <div className="thinking" role="status"><VitaAvatar /><Spinner />Vita is listening and checking saved context…</div>}<div ref={chatEnd} />
+                {busy.chat && <div className="thinking" role="status"><VitaAvatar /><Spinner />Vita is checking saved context and preparing your reply…</div>}
               </div>
-              <form className="chat-composer" onSubmit={sendChat}><label className="sr-only" htmlFor="chat-input">Message Vita</label><textarea id="chat-input" value={chatDraft} onChange={e => setChatDraft(e.target.value)} placeholder="Tell Vita what's on your mind…" maxLength={4000} rows={2} disabled={busy.chat || busy.newConversation} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form.requestSubmit(); } }} /><button className="send-button" aria-label="Send message" disabled={!chatDraft.trim() || busy.chat || busy.newConversation || !services.chatConfigured}>{busy.chat ? <Spinner /> : <Send size={19} />}</button></form><p className="mobile-chat-safety">AI support, not a doctor. Fictional data only.<br />For emergencies, contact local emergency services.</p><p className="composer-footnote"><LockKeyhole size={12} /> {workspace.conversationMemory?.enabled ? "Automatic memory is on. Check confirmed chat receipts in Patient memory." : "Automatic memory is off. Enable it in the memory panel to remember future conversations."}</p>
+              {chatScroll.hasNewMessages && <button type="button" className="new-messages-button" onClick={chatScroll.jumpToLatest}>New reply · Jump to latest <ChevronDown size={15} /></button>}
+              <form className="chat-composer" onSubmit={sendChat}><label className="sr-only" htmlFor="chat-input">Message Vita</label><textarea id="chat-input" value={chatDraft} onChange={e => setChatDraft(e.target.value)} placeholder={busy.chat ? "You can draft your next message…" : "Tell Vita what's on your mind…"} maxLength={4000} rows={2} disabled={busy.newConversation} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.form.requestSubmit(); } }} /><button className="send-button" aria-label="Send message" disabled={!chatDraft.trim() || busy.chat || busy.newConversation || !services.chatConfigured}>{busy.chat ? <Spinner /> : <Send size={19} />}</button></form><p className="mobile-chat-safety">AI support, not a doctor. Fictional data only.<br />For emergencies, contact local emergency services.</p><p className="composer-footnote"><LockKeyhole size={12} /> {workspace.conversationMemory?.enabled ? "Automatic memory is on. Check confirmed chat receipts in Patient memory." : "Automatic memory is off. Enable it in the memory panel to remember future conversations."}</p>
             </section><aside className="context-column">{automaticMemoryPanel(false)}<div className="panel context-card"><div className="context-icon"><Database size={20} /></div><p className="eyebrow">SEE MEMORY MAKE A DIFFERENCE</p><h3>{stored === 0 ? "Your memory starts here." : stored + " confirmed " + (stored === 1 ? "memory." : "memories.")}</h3><p>Chat history and Walrus memory are different. Try a fresh conversation to see what survives.</p><ol className="memory-steps"><li>Automatic chat memory is on for new profiles. You can pause it anytime.</li><li>Chat normally. Your messages and Vita replies are archived automatically.</li><li>Wait for a confirmed blob ID.</li><li>Start a <strong>New conversation</strong> and ask what Vita remembers.</li></ol><div className="mini-stat"><span>Automatic chat memory</span><strong>{workspace.conversationMemory?.enabled ? "On" : "Off"}</strong></div><div className="mini-stat"><span>Confirmed blobs · this patient</span><strong>{stored}</strong></div><button className="button secondary full" onClick={() => changeTab("memory")}>Open patient memory <ArrowRight size={16} /></button></div><div className="care-tip"><HeartPulse size={19} /><h3>Warm support. Honest limits.</h3><p>Vita helps you feel heard and prepare for care. It cannot diagnose, prescribe, or replace a qualified clinician.</p></div><div className="urgent-note">If you may be experiencing a medical emergency, contact local emergency services or seek urgent care.</div></aside></div>
           </>}
           {tab === "memory" && patient && <>{automaticMemoryPanel(true)}<div className="memory-overview"><div><span className="eyebrow">VERIFIABLE CONTINUITY</span><h2>Remember what matters.</h2><p>{stored} confirmed unique blob{stored === 1 ? "" : "s"} tracked for this patient in this app.</p><span className="soft-pill"><Database size={13} />Walrus mainnet · {services.memoryConfigured ? "Configured" : "Not connected"}</span></div><img src={memoryImage} alt="Abstract translucent layers representing connected memories" /></div><div className="memory-grid"><section className="panel pad"><div className="section-title"><h2>Review a new memory</h2><span className="soft-pill">{user.isDemo ? "Fictional demo · self-reported" : isPatient ? "Patient-reported" : "Clinician-confirmed"}</span></div><p className="muted small-text">{user.isDemo || isPatient ? "Review and edit the detail you want to bring into future conversations. Saving does not verify a medical fact." : "Confirm only information you have reviewed. Your save records it as clinician-confirmed."}</p>{!patient.memoryConsent && <Notice>Reviewed note saves need separate consent. The Walrus relayer processes text before encryption; recalled text goes to Gemini during chat. {canConsent && <button className="inline-link" disabled={busy.consent} onClick={() => perform("consent", async () => { const data = await api(`${base}/consent`, { method: "PATCH", body: { enabled: true } }); updatePatient(data.patient); })}>Allow reviewed memory saves</button>}</Notice>}<form className="form-stack" onSubmit={saveMemory}><label>Memory to save<textarea aria-label="Memory to save" rows={5} maxLength={4000} required value={memoryDraft} onChange={e => setMemoryDraft(e.target.value)} placeholder="e.g. I prefer short, plain-language appointment summaries." /></label><small>Walrus’s relayer receives this text before encrypting it. Save fictional data only during this pilot.</small><button className="button primary" disabled={!memoryDraft.trim() || !patient.memoryConsent || !services.memoryConfigured || busy.memory}>{busy.memory ? <Spinner /> : <ShieldCheck size={17} />}{isPatient || user.isDemo ? "Save reviewed memory" : "Confirm & save memory"}</button></form></section><section className="panel pad"><h2>Recall from Walrus</h2><p className="muted small-text">Search the patient’s memory namespace. The returned context comes from Walrus Memory.</p><form className="search-form" onSubmit={e => { e.preventDefault(); perform("recall", async () => { const id = selectedId; const data = await api(`${base}/recall`, { method: "POST", body: { query: recallQuery } }); if (scope.current === id) setRecallResults(data.memories); }); }}><label className="sr-only" htmlFor="recall-query">Search memories</label><input id="recall-query" maxLength={1000} required value={recallQuery} onChange={e => setRecallQuery(e.target.value)} placeholder="What are my care preferences?" /><button className="button secondary" disabled={busy.recall || !services.memoryConfigured}>{busy.recall ? <Spinner /> : <Search size={16} />}Search</button></form>{recallResults === null ? <Empty icon={Search} title="Find a familiar detail">Ask a question to retrieve relevant stored context.</Empty> : recallResults.length === 0 ? <Empty title="No matching memories">Try another question or save your first memory.</Empty> : <div className="recall-results">{recallResults.map((m, i) => <article key={`${m.blobId}-${i}`}><p>{m.text}</p><code>{m.blobId}</code><a className="text-button" href={blobExplorerUrl(m.blobId)} target="_blank" rel="noreferrer">View source on Walrus Scan</a></article>)}</div>}</section></div><section className="panel pad receipts-panel"><div className="section-title"><h2>Memory & storage receipts</h2><span className="muted small-text">A blob ID is not a transaction hash.</span></div>{workspace.memories.length === 0 ? <Empty icon={History} title="No memories saved yet">Your reviewed memories and their storage status will appear here.</Empty> : <div className="memory-list">{workspace.memories.map(m => <article className="memory-record" key={m.id}><div className="record-top"><span className={`status-pill ${m.status}`}>{m.status === "stored" ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}{m.status === "stored" ? "Stored on Walrus" : m.status === "processing" ? "Awaiting confirmation" : m.status === "unknown" ? "Submission unconfirmed" : "Storage failed"}</span><time>{date(m.createdAt)}</time></div><p>{m.text}</p><span className="provenance"><ShieldCheck size={13} />{m.provenance === "clinician-confirmed" ? "Clinician-confirmed" : m.provenance?.startsWith("demo-") ? "Fictional demo · self-reported" : "Patient-reported"}</span>{m.error && <Notice type="error">{m.error}</Notice>}{m.jobId && <div className="receipt-line"><span>Job ID</span><code>{m.jobId}</code></div>}{m.blobId && <div className="receipt-line"><span>Blob ID</span><code>{m.blobId}</code><CopyButton value={m.blobId} label="Copy blob ID" /></div>}{m.status === "stored" && m.blobId && <a className="text-button blob-link" href={blobExplorerUrl(m.blobId)} target="_blank" rel="noreferrer">View blob on Walrus Scan <ArrowRight size={12} /></a>}{m.status === "processing" && <button className="text-button" disabled={busy[m.id]} onClick={() => perform(m.id, async () => { const data = await api(`${base}/memories/${m.id}/status`); updateMemory(data.memory); })}><RefreshCw size={14} />Refresh receipt</button>}</article>)}</div>}</section></>}

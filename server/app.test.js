@@ -490,6 +490,62 @@ test('chat idempotency preserves one exchange and retrieval uses only the author
   assert.equal((await client.request('GET', workspacePath(patient))).body.messages.length, 2);
 });
 
+test('retrying a confirmed chat failure uses the same request ID and commits one exchange and archive', async t => {
+  const app = await harness(t);
+  const { client, patient } = await patientSetup(app);
+  await client.request('PATCH', patientPath(patient, 'conversation-memory/consent'), { enabled: true });
+  const request = chatRequest('Fictional retry example.');
+  let attempts = 0;
+  app.chat.respond = async () => {
+    if (++attempts === 1) throw Object.assign(new Error('Temporary provider outage.'), { status: 503, code: 'LLM_UNAVAILABLE' });
+    return 'Test reply after explicit retry.';
+  };
+  assert.equal((await client.request('POST', patientPath(patient, 'chat'), request)).status, 503);
+  const failed = (await client.request('GET', workspacePath(patient))).body;
+  assert.equal(failed.messages.length, 0);
+  assert.equal(failed.conversationMemory.records.length, 0);
+  const retried = await client.request('POST', patientPath(patient, 'chat'), request);
+  assert.equal(retried.status, 200);
+  const repeated = await client.request('POST', patientPath(patient, 'chat'), request);
+  assert.equal(repeated.status, 200);
+  assert.equal(repeated.body.assistantMessage.id, retried.body.assistantMessage.id);
+  assert.equal(attempts, 2);
+  const workspace = (await client.request('GET', workspacePath(patient))).body;
+  assert.equal(workspace.messages.length, 2);
+  assert.equal(workspace.conversationMemory.records.length, 1);
+});
+
+test('a pending chat with an uncertain outcome is never reopened by retry', async t => {
+  const app = await harness(t);
+  const { client, patient } = await patientSetup(app);
+  const request = chatRequest('Unknown prior outcome.');
+  await app.store.run('INSERT INTO chat_requests VALUES (?,?,?,?,?,?)', patient.id, client.user.id, request.requestId, 'pending', null, new Date().toISOString());
+  assert.equal((await client.request('POST', patientPath(patient, 'chat'), request)).status, 409);
+  assert.equal(app.calls.chat.length, 0);
+  assert.equal((await client.request('GET', workspacePath(patient))).body.messages.length, 0);
+});
+
+test('concurrent retries of one confirmed failure acquire only one chat lease', async t => {
+  const app = await harness(t);
+  const { client, patient } = await patientSetup(app);
+  const request = chatRequest('Fictional simultaneous retry example.');
+  await app.store.run('INSERT INTO chat_requests VALUES (?,?,?,?,?,?)', patient.id, client.user.id, request.requestId, 'failed', null, new Date().toISOString());
+  let release, started;
+  const gate = new Promise(resolve => { release = resolve; });
+  const entered = new Promise(resolve => { started = resolve; });
+  t.after(() => release());
+  let calls = 0;
+  app.chat.respond = async () => { calls++; started(); await gate; return 'One retry result.'; };
+  const first = client.request('POST', patientPath(patient, 'chat'), request);
+  await entered;
+  const second = await client.request('POST', patientPath(patient, 'chat'), request);
+  assert.equal(second.status, 409);
+  release();
+  assert.equal((await first).status, 200);
+  assert.equal(calls, 1);
+  assert.equal((await client.request('GET', workspacePath(patient))).body.messages.length, 2);
+});
+
 test('retrieval filters mismatched or malformed patient envelopes from responses and model context', async (t) => {
   const app = await harness(t);
   const { client, patient } = await patientSetup(app);
