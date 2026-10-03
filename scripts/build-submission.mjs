@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { validatePublicEvidence } from './publish-submission.mjs';
+import './build-medium-article.mjs';
 
 const root = resolve('docs/submission');
 const read = name => readFileSync(resolve(root, name), 'utf8');

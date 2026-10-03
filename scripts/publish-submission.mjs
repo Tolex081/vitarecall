@@ -6,6 +6,7 @@ import path from "node:path";
 export const PUBLIC_SUBMISSION_FILES = Object.freeze([
   "index.html", "article.html", "evidence.html", "guide.html", "demo.html",
   "README.md", "ARTICLE.md", "ASSETS.md", "DEMO.md", "SUBMISSION-GUIDE.md",
+  "MEDIUM-ARTICLE.md",
   "ARTWORK-PROMPTS.json", "evidence.json",
   "assets/walrus-cover.png", "assets/walrus-changing-preferences.png",
   "assets/architecture.svg", "assets/architecture.png",

@@ -13,6 +13,7 @@
     "db:import:sqlite": "node scripts/import-sqlite.mjs",
     "test:deployment": "node --test scripts/build-vercel.test.mjs scripts/publish-submission.test.mjs",
     "build:submission": "node scripts/build-submission.mjs",
+    "build:medium-article": "node scripts/build-medium-article.mjs",
     "test:postgres": "node scripts/test-postgres.mjs",
     "preview": "vite preview",
     "test": "node --test server/*.test.js",

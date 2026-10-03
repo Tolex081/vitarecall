@@ -6,6 +6,7 @@ Prepared October 1, 2026. Fictional data only. Medium publication, X posting and
 
 - [Start here: visual package index](index.html)
 - [Medium article preview](article.html) and [editable Markdown](ARTICLE.md)
+- [Medium paste-in copy with no URLs](MEDIUM-ARTICLE.md) — upload the six matching images manually; the live plain-text copy is at [VitaRecall / Medium copy](https://vitarecall.vercel.app/submission/MEDIUM-ARTICLE.md)
 - [Public-ready evidence page](evidence.html) and [exact sanitized data](evidence.json)
 - [Submission preparation guide](SUBMISSION-GUIDE.md) / [formatted guide](guide.html)
 - [90-second demo and reproduction plan](DEMO.md) / [formatted plan](demo.html)
