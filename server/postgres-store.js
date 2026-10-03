@@ -1,8 +1,8 @@
 import pg from "pg";
 
-export const SCHEMA_VERSION = "003_telegram";
+export const SCHEMA_VERSION = "004_telegram_login";
 const tables = new Set([
-  "users", "sessions", "demo_profiles", "patients", "care_team", "messages",
+  "users", "sessions", "demo_profiles", "external_identities", "patients", "care_team", "messages",
   "chat_conversations", "message_memory_traces", "chat_requests", "memories",
   "notes", "tasks", "audit_events", "rate_limits", "operation_locks",
   "conversation_memory_settings", "conversation_memories",

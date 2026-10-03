@@ -70,7 +70,46 @@ function TelegramSettings({ telegram, busy, onConnect, onDisconnect, onActivate 
   </section>;
 }
 
-function Auth({ onSession, signedOutName = "" }) {
+function TelegramLoginButton({ botUsername, onSession }) {
+  const target = useRef(null);
+  const onSessionRef = useRef(onSession);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { onSessionRef.current = onSession; }, [onSession]);
+  useEffect(() => {
+    if (!botUsername || !target.current) return undefined;
+    let active = true;
+    const callbackName = "vitaTelegramLogin";
+    const previous = window[callbackName];
+    const authenticate = async data => {
+      if (!active) return;
+      setBusy(true); setError("");
+      try { onSessionRef.current(await api("/auth/telegram", { method: "POST", body: data })); }
+      catch (reason) { if (active) setError(reason.message); }
+      finally { if (active) setBusy(false); }
+    };
+    window[callbackName] = authenticate;
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.dataset.telegramLogin = botUsername;
+    script.dataset.size = "large";
+    script.dataset.radius = "12";
+    script.dataset.onauth = `${callbackName}(user)`;
+    target.current.replaceChildren(script);
+    return () => {
+      active = false;
+      script.remove();
+      if (window[callbackName] === authenticate) {
+        if (previous) window[callbackName] = previous;
+        else delete window[callbackName];
+      }
+    };
+  }, [botUsername]);
+  return <div className="telegram-login-control"><div ref={target} aria-label="Continue with Telegram" />{busy && <p className="small-text muted"><Spinner />Signing in securely…</p>}{error && <Notice type="error">{error}</Notice>}</div>;
+}
+
+function Auth({ onSession, signedOutName = "", services = {} }) {
   const [mode, setMode] = useState("demo");
   const [emailMode, setEmailMode] = useState("login");
   const [role, setRole] = useState("patient");
@@ -79,6 +118,7 @@ function Auth({ onSession, signedOutName = "" }) {
   const [error, setError] = useState("");
   const email = mode === "email";
   const register = email && emailMode === "register";
+  const telegramLogin = Boolean(services.telegramLoginConfigured && services.telegramBotUsername);
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError("");
     const values = Object.fromEntries(new FormData(event.currentTarget));
@@ -89,11 +129,11 @@ function Auth({ onSession, signedOutName = "" }) {
   }
   return <main className="auth-layout">
     <section className="auth-story"><Brand light /><div className="auth-heading"><span className="eyebrow"><Sparkles size={14} /> CARE THAT REMEMBERS</span><h1>Your story.<br />Better connected.</h1><p>A calmer space to prepare for care, keep track of what matters, and pick up where you left off.</p></div><div className="auth-art"><img src={clinicianImage} alt="A friendly illustrated walrus clinician holding a tablet" /><div className="art-note"><ShieldCheck size={22} /><span><strong>A little continuity goes a long way.</strong><small>Patient-led memory. Clear sources.</small></span></div></div><p className="auth-footer">Made for patients. Connected with their care team.</p></section>
-    <section className="auth-form-section"><div className="mobile-brand"><Brand /></div><div className="auth-form-card"><VitaAvatar large /><p className="eyebrow">A CHATBOT THAT REMEMBERS</p><h2>{email ? register ? "Let's get to know you." : "Welcome back." : mode === "restore" ? "Pick up your story." : "Meet your walrus doc."}</h2><p className="muted">{email ? "Your existing email account still works here." : mode === "restore" ? "Use your private recovery code to reopen the same memory workspace, even on another device." : "Just a username to explore. A caring AI companion, with memories you can actually verify."}</p><div className="auth-tabs"><button type="button" className={mode === "demo" ? "selected" : ""} onClick={() => { setMode("demo"); setError(""); }}>Try the demo</button><button type="button" className={mode === "restore" ? "selected" : ""} onClick={() => { setMode("restore"); setError(""); }}>Restore demo</button><button type="button" className={email ? "selected" : ""} onClick={() => { setMode("email"); setError(""); }}>Email account</button></div>
+    <section className="auth-form-section"><div className="mobile-brand"><Brand /></div><div className="auth-form-card"><VitaAvatar large /><p className="eyebrow">A CHATBOT THAT REMEMBERS</p><h2>{email ? register ? "Let's get to know you." : "Welcome back." : mode === "restore" ? "Pick up your story." : "Meet your walrus doc."}</h2><p className="muted">{email ? "Your existing email account still works here." : mode === "restore" ? "Use your private recovery code to reopen the same memory workspace, even on another device." : "Sign in with Telegram to reopen the same private workspace on any browser or device."}</p>{telegramLogin && <section className="telegram-login-card"><div><strong>Continue with Telegram</strong><p>Telegram securely confirms your account. Vita uses its unique Telegram ID, not an editable username, to find your existing chats and Walrus memories.</p></div><TelegramLoginButton botUsername={services.telegramBotUsername} onSession={onSession} /></section>}<div className="auth-tabs"><button type="button" className={mode === "demo" ? "selected" : ""} onClick={() => { setMode("demo"); setError(""); }}>Try the demo</button><button type="button" className={mode === "restore" ? "selected" : ""} onClick={() => { setMode("restore"); setError(""); }}>Restore demo</button><button type="button" className={email ? "selected" : ""} onClick={() => { setMode("email"); setError(""); }}>Email account</button></div>
       {email && <div className="email-mode"><button className={`text-button ${!register ? "selected" : ""}`} onClick={() => setEmailMode("login")}>Sign in</button><button className={`text-button ${register ? "selected" : ""}`} onClick={() => setEmailMode("register")}>Create account</button></div>}
-      {signedOutName && <Notice>Signed out of <strong>{signedOutName}</strong>. Enter another username for a separate demo, or choose Restore demo with your private recovery code to return to your saved workspace.</Notice>}
+      {signedOutName && <Notice>Signed out of <strong>{signedOutName}</strong>. Sign in with the same Telegram account to return to its protected workspace, or enter another username for a separate demo.</Notice>}
       <form onSubmit={submit} className="form-stack">
-        {!email && <label>X / Twitter username<input name="username" aria-label="X / Twitter username" aria-describedby="username-help" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus={Boolean(signedOutName)} maxLength={16} pattern="@?[A-Za-z0-9_]{1,15}" required placeholder="yourusername" /><small id="username-help">Enter your username without the @. This is an unverified demo label, not X sign-in. Public avatars come from unavatar.io; initials appear if a photo is unavailable.</small></label>}
+        {!email && <label>X / Twitter username<input name="username" aria-label="X / Twitter username" aria-describedby="username-help" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus={Boolean(signedOutName)} maxLength={16} pattern="@?[A-Za-z0-9_]{1,15}" required placeholder="yourusername" /><small id="username-help">For a separate fictional demo only — this is not X sign-in and cannot reopen an existing workspace. Public avatars come from unavatar.io; initials appear if a photo is unavailable.</small></label>}
         {mode === "restore" && <label>Private recovery code<input name="recoveryCode" type="password" autoComplete="off" required maxLength={200} placeholder="The code saved when you joined" /></label>}
         {register && <label>Your name<input name="name" autoComplete="name" minLength={2} maxLength={80} required placeholder="e.g. Ada Okafor" /></label>}
         {(register || mode === "demo") && <fieldset className="role-options"><legend>{email ? "I’m joining as a" : "Explore the demo as a"}</legend>{["patient", "clinician"].map(value => <label key={value}><input type="radio" name="accountRole" checked={role === value} onChange={() => setRole(value)} /><span>{value === "patient" ? <HeartPulse size={17} /> : <Stethoscope size={17} />}{value === "patient" ? "Patient" : "Clinician"}</span></label>)}</fieldset>}
@@ -342,7 +382,7 @@ function App() {
 
   if (booting) return <div className="boot"><Brand /><Spinner /><p>Opening your care workspace…</p></div>;
   if (!session) return <div className="boot"><Brand /><Notice type="error">{error || "The server is unavailable."}</Notice><button className="button primary" onClick={boot}>Try again</button></div>;
-  if (!user) return <Auth onSession={acceptSession} signedOutName={signedOutName} />;
+  if (!user) return <Auth onSession={acceptSession} signedOutName={signedOutName} services={services} />;
 
   const stored = (workspace?.stats.storedBlobs || 0) + (workspace?.conversationMemory?.counts.stored || 0);
   const completed = workspace?.tasks.filter(task => task.completed).length || 0;
@@ -350,7 +390,7 @@ function App() {
   const archiveAttention = (workspace?.conversationMemory?.counts.unknown || 0) + (workspace?.conversationMemory?.counts.failed || 0);
   const mobileMemoryStatus = archiveAttention ? "Check saves" : archivePending ? `${archivePending} pending` : `${stored} saved / auto ${workspace?.conversationMemory?.enabled ? "on" : "off"}`;
   return <div className={`app-shell ${tab === "chat" ? "chat-view" : ""} ${tab === "chat" && workspace && !recoveryCode && services.chatConfigured ? "compact-chat" : ""} ${keyboardOpen ? "keyboard-open" : ""}`}>
-    <aside className="sidebar"><Brand light /><div className="workspace-label"><span className="workspace-symbol">{isPatient ? <HeartPulse size={19} /> : <Stethoscope size={19} />}</span><span><strong>{isPatient ? "My care space" : user.isDemo ? "Clinician demo" : "Clinical workspace"}</strong><small>{user.isDemo ? "Walrus Memory demo" : isPatient ? "Patient portal" : "Care team"}</small></span></div><span className="nav-title">WORKSPACE</span><nav aria-label="Primary navigation">{NAV.map(({ id, label, icon: Icon }) => <button key={id} aria-label={label} className={`nav-item ${tab === id ? "active" : ""}`} onClick={() => changeTab(id)}><Icon size={19} /><span>{label}</span>{id === "memory" && stored > 0 && <b>{stored}</b>}</button>)}</nav><div className="sidebar-bottom"><div className="sidebar-tip"><ShieldCheck size={23} /><h3>You stay in control.</h3><p>Choose what to remember and who can access your care space.</p><button onClick={() => changeTab("settings")}>Memory & privacy <ArrowRight size={14} /></button></div><div className="profile"><Avatar user={user} /><span><strong>{displayName(user)}</strong><small>{user.isDemo ? `${isPatient ? "Patient" : "Clinician"} demo · unverified` : isPatient ? "Patient account" : "Invited clinician"}</small></span></div></div></aside>
+    <aside className="sidebar"><Brand light /><div className="workspace-label"><span className="workspace-symbol">{isPatient ? <HeartPulse size={19} /> : <Stethoscope size={19} />}</span><span><strong>{isPatient ? "My care space" : user.isDemo ? "Clinician demo" : "Clinical workspace"}</strong><small>{user.isDemo ? "Walrus Memory demo" : isPatient ? "Patient portal" : "Care team"}</small></span></div><span className="nav-title">WORKSPACE</span><nav aria-label="Primary navigation">{NAV.map(({ id, label, icon: Icon }) => <button key={id} aria-label={label} className={`nav-item ${tab === id ? "active" : ""}`} onClick={() => changeTab(id)}><Icon size={19} /><span>{label}</span>{id === "memory" && stored > 0 && <b>{stored}</b>}</button>)}</nav><div className="sidebar-bottom"><div className="sidebar-tip"><ShieldCheck size={23} /><h3>You stay in control.</h3><p>Choose what to remember and who can access your care space.</p><button onClick={() => changeTab("settings")}>Memory & privacy <ArrowRight size={14} /></button></div><div className="profile"><Avatar user={user} /><span><strong>{displayName(user)}</strong><small>{user.isDemo ? `${isPatient ? "Patient" : "Clinician"} demo · unverified` : user.authProvider === "telegram" ? "Telegram-secured patient account" : isPatient ? "Patient account" : "Invited clinician"}</small></span></div></div></aside>
     <main className="main-workspace"><header className="topbar"><div className="mobile-brand"><Brand /></div><div className="breadcrumbs"><span>{isPatient ? "My care space" : user.isDemo ? "Clinician demo" : "Care team"}</span><ChevronRight size={14} /><strong>{NAV.find(n => n.id === tab).label}</strong></div><div className="top-actions"><span className="pilot-tag">Synthetic-data pilot</span><Avatar user={user} small /><button className="button secondary sign-out-button" title={user.isDemo ? "Sign out to use another username" : "Sign out"} onClick={logout} disabled={Object.values(busy).some(Boolean)}>{busy.logout ? <Spinner /> : <LogOut size={16} />}<span>{busy.logout ? "Signing out..." : "Sign out"}</span></button></div></header>
       <div className="page-content">
         {recoveryCode && <section className="recovery-banner" aria-label="Save your recovery code"><LockKeyhole size={22} /><div><h2>Save your private recovery code</h2><p>Your username alone cannot reopen this workspace. Keep this code to restore the same memories on another browser or device. Anyone with it can access your demo.</p><div className="recovery-code"><code>{recoveryCode}</code><CopyButton value={recoveryCode} label="Copy recovery code" /></div><small>Shown once. It is not stored in browser local storage or sent to Walrus.</small></div><button className="button secondary" onClick={() => setRecoveryCode("")}>I've saved my code</button></section>}

@@ -6,6 +6,7 @@ import { createSessions, equal, hash, hashPassword, publicUser, verifyPassword }
 import { createAvatarHandler } from "./avatars.js";
 import { createCoordination } from "./coordination.js";
 import { createConversationMemory, conversationNamespace } from "./conversation-memory.js";
+import { verifyTelegramLogin } from "./telegram-login.js";
 
 const now = () => new Date().toISOString();
 function fail(status, message, code) { throw Object.assign(new Error(message), { status, code }); }
@@ -31,7 +32,7 @@ export function createApp({ config, store, memory, chat, telegram = { configured
     res.set({ "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin", "Permissions-Policy": "camera=(), microphone=(), geolocation=()" });
     if (config.production) {
       res.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-      res.set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+      res.set("Content-Security-Policy", "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-src https://telegram.org https://oauth.telegram.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
     }
     next();
   });
@@ -95,7 +96,7 @@ export function createApp({ config, store, memory, chat, telegram = { configured
     next();
   });
   const services = () => ({ memoryConfigured: memory.configured, chatConfigured: chat.configured, model: chat.model, network: "mainnet", accountId: memory.accountId || null,
-    telegramConfigured: Boolean(telegram.configured), telegramBotUsername: telegram.username || null });
+    telegramConfigured: Boolean(telegram.configured), telegramLoginConfigured: Boolean(config.telegramBotToken && config.telegramBotUsername), telegramBotUsername: telegram.username || null });
   const sessionPayload = (req) => ({ user: publicUser(req.user), csrfToken: req.session.csrf_token, services: services() });
   app.get("/api/session", async (req, res) => {
     if (!req.session) {
@@ -139,6 +140,48 @@ export function createApp({ config, store, memory, chat, telegram = { configured
     await sessions.create(req, res, profile.user_id);
     await store.audit(profile.user_id, null, "demo.restored");
     res.json(sessionPayload(req));
+  });
+  app.post("/api/auth/telegram", async (req, res) => {
+    if (!config.telegramBotToken || !config.telegramBotUsername) fail(503, "Telegram sign-in is not configured yet.", "TELEGRAM_LOGIN_NOT_CONFIGURED");
+    const profile = verifyTelegramLogin(req.body, config.telegramBotToken);
+    const known = await store.get("SELECT user_id FROM external_identities WHERE provider='telegram' AND subject=?", profile.telegramId);
+    if (req.user && (!known || known.user_id !== req.user.id)) fail(409, "Sign out before using a different Telegram account.", "TELEGRAM_ACCOUNT_MISMATCH");
+    const findExisting = () => store.get("SELECT user_id FROM external_identities WHERE provider='telegram' AND subject=?", profile.telegramId);
+    let account;
+    try {
+      account = await store.transaction(async tx => {
+        const existing = await tx.get("SELECT user_id FROM external_identities WHERE provider='telegram' AND subject=?", profile.telegramId);
+        if (existing) {
+          await tx.run("UPDATE external_identities SET username=?,updated_at=? WHERE provider='telegram' AND subject=?", profile.username, now(), profile.telegramId);
+          await tx.audit(existing.user_id, null, "auth.telegram.signed_in");
+          return { userId: existing.user_id, created: false };
+        }
+        const priorChatConnection = await tx.get("SELECT user_id,patient_id FROM telegram_connections WHERE telegram_user_id=?", profile.telegramId);
+        if (priorChatConnection) {
+          const otherIdentity = await tx.get("SELECT subject FROM external_identities WHERE provider='telegram' AND user_id=?", priorChatConnection.user_id);
+          if (otherIdentity && otherIdentity.subject !== profile.telegramId) fail(409, "This Vita account is already protected by a different Telegram account.", "TELEGRAM_ACCOUNT_MISMATCH");
+          await tx.run("INSERT INTO external_identities (provider,subject,user_id,username,created_at,updated_at) VALUES (?,?,?,?,?,?)", "telegram", profile.telegramId, priorChatConnection.user_id, profile.username, now(), now());
+          await tx.audit(priorChatConnection.user_id, priorChatConnection.patient_id, "auth.telegram.claimed_existing_workspace");
+          return { userId: priorChatConnection.user_id, created: false };
+        }
+        const id = randomUUID(), patientId = randomUUID(), createdAt = now();
+        const passwordHash = await hashPassword(randomBytes(32).toString("hex"));
+        await tx.run("INSERT INTO users VALUES (?,?,?,?,?,?)", id, profile.name, `telegram-${profile.telegramId}@identity.vitarecall.invalid`, passwordHash, "patient", createdAt);
+        await tx.run("INSERT INTO external_identities (provider,subject,user_id,username,created_at,updated_at) VALUES (?,?,?,?,?,?)", "telegram", profile.telegramId, id, profile.username, createdAt, createdAt);
+        await tx.run("INSERT INTO patients (id,user_id,care_code) VALUES (?,?,?)", patientId, id, randomBytes(10).toString("hex").toUpperCase());
+        await conversationMemory.initialize(tx, patientId, id, true);
+        await tx.audit(id, patientId, "auth.telegram.created");
+        return { userId: id, created: true };
+      });
+    } catch (error) {
+      // A second identical callback may race the first. It can safely use the
+      // canonical identity that won the unique provider/subject constraint.
+      const existing = await findExisting();
+      if (!existing) throw error;
+      account = { userId: existing.user_id, created: false };
+    }
+    await sessions.create(req, res, account.userId);
+    res.status(account.created ? 201 : 200).json(sessionPayload(req));
   });
   app.post("/api/auth/register", async (req, res) => {
     const automaticMemory = initialAutomaticMemory(req.body.automaticMemory);

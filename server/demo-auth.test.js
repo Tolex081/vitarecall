@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { createApp } from './app.js';
 import { createTestStore } from './test-store.js';
 
@@ -16,7 +16,7 @@ async function harness(t) {
     async verify() { return { connected: true, network: 'mainnet', accountId: this.accountId }; },
   };
   const chat = { configured: true, model: 'injected-test-model', async respond(input) { calls.chat.push(input); return 'Injected test response.'; } };
-  const config = { production: false, secureCookies: false, appOrigin: origin, clinicianInviteCode: 'advanced-invite' };
+  const config = { production: false, secureCookies: false, appOrigin: origin, clinicianInviteCode: 'advanced-invite', telegramBotToken: 'telegram-login-test-token', telegramBotUsername: 'VitaRecallTestBot' };
   const app = createApp({ config, store, memory, chat });
   const server = await new Promise(resolve => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)); });
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await store.close(); });
@@ -47,6 +47,12 @@ async function harness(t) {
 }
 const patientUrl = (patient, route) => `/api/patients/${patient.id}/${route}`;
 const chatRequest = (message, extra = {}) => ({ message, requestId: randomUUID(), ...extra });
+const telegramLogin = ({ id = 7001, authDate = Math.floor(Date.now() / 1000) } = {}) => {
+  const payload = { id, first_name: 'Ada', last_name: 'Okafor', username: 'ada_example', auth_date: authDate };
+  const dataCheck = Object.keys(payload).sort().map(key => `${key}=${payload[key]}`).join('\n');
+  const secret = createHash('sha256').update('telegram-login-test-token').digest();
+  return { ...payload, hash: createHmac('sha256', secret).update(dataCheck).digest('hex') };
+};
 
 test('new demo profiles default memory on, save the first exchange, and preserve a later opt-out across restore', async t => {
   const app = await harness(t), client = app.client();
@@ -119,6 +125,39 @@ test('a demo handle creates an isolated unverified workspace and a once-only has
   const loaded = await first.request('GET', '/api/session');
   assert.equal(loaded.body.user.username, 'demo_user');
   assert.equal('recoveryCode' in loaded.body, false);
+});
+
+test('verified Telegram sign-in is unique across browsers and reopens a previously bot-linked workspace', async t => {
+  const app = await harness(t), first = app.client(), second = app.client(), legacy = app.client();
+  await first.request('GET', '/api/session');
+  const created = await first.request('POST', '/api/auth/telegram', telegramLogin());
+  assert.equal(created.status, 201);
+  assert.equal(created.body.user.authProvider, 'telegram');
+  assert.equal(created.body.user.email, null);
+  assert.equal(created.body.user.isDemo, false);
+  const patient = await first.patient();
+  await first.request('POST', patientUrl(patient, 'chat'), chatRequest('A fictional chat that should remain in this workspace.'));
+  await second.request('GET', '/api/session');
+  const restored = await second.request('POST', '/api/auth/telegram', telegramLogin());
+  assert.equal(restored.status, 200);
+  assert.equal(restored.body.user.id, created.body.user.id);
+  assert.equal((await second.patient()).id, patient.id);
+  assert.equal((await second.request('GET', patientUrl(patient, 'workspace'))).body.messages.length, 2);
+  const altered = telegramLogin({ id: 7002 });
+  altered.first_name = 'Imposter';
+  await legacy.request('GET', '/api/session');
+  assert.equal((await legacy.request('POST', '/api/auth/telegram', altered)).status, 401, 'a payload modified after Telegram signs it is rejected');
+
+  const demo = await legacy.create('linked_existing');
+  const demoPatient = await legacy.patient();
+  await app.store.run('INSERT INTO telegram_connections VALUES (?,?,?,?,?,?)', '8008', '8008', demoPatient.id, demo.body.user.id, '2026-10-04', '2026-10-04');
+  const third = app.client();
+  await third.request('GET', '/api/session');
+  const claimed = await third.request('POST', '/api/auth/telegram', telegramLogin({ id: 8008 }));
+  assert.equal(claimed.status, 200);
+  assert.equal(claimed.body.user.id, demo.body.user.id);
+  assert.equal((await third.patient()).id, demoPatient.id);
+  assert.equal((await app.store.get("SELECT subject FROM external_identities WHERE provider='telegram' AND user_id=?", demo.body.user.id)).subject, '8008');
 });
 
 test('only the matching private recovery code restores the same demo namespace on another device', async t => {

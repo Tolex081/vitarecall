@@ -10,7 +10,7 @@ try {
     connectionString: process.env.DATABASE_URL,
     ca: process.env.DATABASE_CA_CERT,
   }));
-  const sql = (await Promise.all(['001_initial', '002_conversation_memory', '003_telegram'].map(version => readFile(new URL(`../supabase/migrations/${version}.sql`, import.meta.url), 'utf8')))).join('\n');
+  const sql = (await Promise.all(['001_initial', '002_conversation_memory', '003_telegram', '004_telegram_login'].map(version => readFile(new URL(`../supabase/migrations/${version}.sql`, import.meta.url), 'utf8')))).join('\n');
   const client = await pool.connect();
   try {
     await client.query(sql);
@@ -20,7 +20,7 @@ try {
   } finally {
     client.release();
   }
-  console.log("VitaRecall database schema 003_telegram is ready. No existing patient records or consent settings were overwritten.");
+  console.log("VitaRecall database schema 004_telegram_login is ready. No existing patient records or consent settings were overwritten.");
 } catch (error) {
   // Connection errors may contain database credentials. Never echo the raw error.
   console.error(error.code === "DATABASE_CONFIG"

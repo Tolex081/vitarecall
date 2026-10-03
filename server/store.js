@@ -22,6 +22,11 @@ export function createStore(filename) {
       user_id TEXT PRIMARY KEY REFERENCES users(id), username TEXT NOT NULL,
       recovery_hash TEXT UNIQUE NOT NULL, created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS external_identities (
+      provider TEXT NOT NULL CHECK(provider IN ('telegram')), subject TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id), username TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+      PRIMARY KEY(provider, subject), UNIQUE(provider, user_id)
+    );
     CREATE TABLE IF NOT EXISTS patients (
       id TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL REFERENCES users(id),
       care_code TEXT UNIQUE NOT NULL, memory_consent INTEGER NOT NULL DEFAULT 0,

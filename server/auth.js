@@ -18,13 +18,14 @@ export async function verifyPassword(password, encoded) {
   return timingSafeEqual(key, Buffer.from(expected, "hex"));
 }
 export const publicUser = (user) => user ? ({
-  id: user.id, name: user.name, email: user.username ? null : user.email, role: user.role,
+  id: user.id, name: user.name, email: user.username || user.telegram_id ? null : user.email, role: user.role,
   isDemo: Boolean(user.username),
+  authProvider: user.telegram_id ? "telegram" : user.username ? "demo" : "password",
   ...(user.username ? { username: user.username, avatarUrl: `/api/avatar/twitter/${user.username}` } : {}),
 }) : null;
 
 export function createSessions(store, config) {
-  const readUser = (id) => store.get("SELECT u.*,d.username FROM users u LEFT JOIN demo_profiles d ON d.user_id=u.id WHERE u.id=?", id);
+  const readUser = (id) => store.get("SELECT u.*,d.username,e.subject AS telegram_id,e.username AS telegram_username FROM users u LEFT JOIN demo_profiles d ON d.user_id=u.id LEFT JOIN external_identities e ON e.user_id=u.id AND e.provider='telegram' WHERE u.id=?", id);
   function writeCookie(res, token, maxAge) {
     res.cookie(cookieName, token, { httpOnly: true, sameSite: "strict", secure: config.secureCookies, path: "/", maxAge });
   }

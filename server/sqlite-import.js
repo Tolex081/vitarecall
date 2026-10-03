@@ -6,6 +6,7 @@ import path from "node:path";
 const tables = {
   users: "id,name,email,password_hash,role,created_at",
   demo_profiles: "user_id,username,recovery_hash,created_at",
+  external_identities: "provider,subject,user_id,username,created_at,updated_at",
   patients: "id,user_id,care_code,memory_consent,consent_updated_at",
   care_team: "patient_id,clinician_id,created_at",
   messages: "rowid,id,patient_id,user_id,role,text,sources_json,created_at",
@@ -35,7 +36,7 @@ export async function importSqlite({ filename, destination, confirmEmptyDestinat
     source.exec("PRAGMA query_only=ON; BEGIN");
     for (const [table, columns] of Object.entries(tables)) {
       const exists = source.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table);
-      if (!exists && ['conversation_memory_settings', 'conversation_memories'].includes(table)) snapshot[table] = [];
+      if (!exists && ['conversation_memory_settings', 'conversation_memories', 'external_identities'].includes(table)) snapshot[table] = [];
       else snapshot[table] = source.prepare(`SELECT ${columns} FROM ${table}`).all();
     }
     source.exec("COMMIT");
