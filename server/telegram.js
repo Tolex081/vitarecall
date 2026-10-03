@@ -35,12 +35,22 @@ export function createTelegramService(config, fetchImpl = fetch) {
     configured, username: username || null,
     linkUrl: (linkToken) => configured ? `https://t.me/${username}?start=${encodeURIComponent(linkToken)}` : null,
     verifyWebhook: (provided) => configured && equal(typeof provided === "string" ? provided : "", webhookSecret),
-    async sendText(chatId, text) {
-      for (const part of chunks(text)) await call("sendMessage", { chat_id: String(chatId), text: part });
+    async sendText(chatId, text, { replyMarkup } = {}) {
+      for (const part of chunks(text)) {
+        const payload = { chat_id: String(chatId), text: part };
+        if (replyMarkup) payload.reply_markup = replyMarkup;
+        await call("sendMessage", payload);
+      }
+    },
+    async answerCallbackQuery(callbackQueryId, text) {
+      const payload = { callback_query_id: String(callbackQueryId) };
+      const message = clean(text);
+      if (message) payload.text = message.slice(0, 200);
+      return call("answerCallbackQuery", payload);
     },
     async setWebhook(appOrigin) {
       const url = new URL("/api/telegram/webhook", appOrigin).toString();
-      return call("setWebhook", { url, secret_token: webhookSecret, allowed_updates: ["message"], drop_pending_updates: false });
+      return call("setWebhook", { url, secret_token: webhookSecret, allowed_updates: ["message", "callback_query"], drop_pending_updates: false });
     },
   };
 }

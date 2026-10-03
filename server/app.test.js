@@ -42,10 +42,12 @@ function fakeServices() {
 
 function fakeTelegram() {
   const sent = [];
+  const callbacks = [];
   return {
-    configured: true, username: 'VitaRecallTestBot', sent,
+    configured: true, username: 'VitaRecallTestBot', sent, callbacks,
     verifyWebhook: value => value === 'telegram-test-secret',
-    async sendText(chatId, text) { sent.push({ chatId, text }); },
+    async sendText(chatId, text, options) { sent.push({ chatId, text, options }); },
+    async answerCallbackQuery(id, text) { callbacks.push({ id, text }); },
     async setWebhook() { return true; },
     linkUrl: token => `https://t.me/VitaRecallTestBot?start=${token}`,
   };
@@ -817,7 +819,14 @@ test('a patient links Telegram once, then Telegram uses the same private chat hi
   assert.equal((await webhook({ update_id: 2, message: { chat: { id: 7001, type: 'private' }, from: { id: 7001 }, text: 'Fictional question from Telegram.' } })).status, 200);
   assert.equal(app.calls.chat.length, 1);
   assert.equal(telegram.sent.at(-1).text, 'Test assistant response to: Fictional question from Telegram.');
+  assert.match(telegram.sent.at(-1).options.replyMarkup.inline_keyboard[0][0].callback_data, /vita:ask/);
   assert.equal((await client.request('GET', workspacePath(patient))).body.messages.length, 2, 'website and Telegram share one patient conversation');
   await webhook({ update_id: 2, message: { chat: { id: 7001, type: 'private' }, from: { id: 7001 }, text: 'Fictional question from Telegram.' } });
   assert.equal(app.calls.chat.length, 1, 'a retried Telegram update cannot create a second reply');
+  assert.equal((await webhook({ update_id: 3, callback_query: { id: 'memory-3', from: { id: 7001 }, data: 'vita:memory', message: { chat: { id: 7001, type: 'private' } } } })).status, 200);
+  assert.deepEqual(telegram.callbacks.at(-1), { id: 'memory-3', text: 'Here’s how Vita remembers.' });
+  assert.match(telegram.sent.at(-1).text, /website and Telegram chat in one private workspace/);
+  assert.equal(app.calls.chat.length, 1, 'menu actions never create a model response');
+  await webhook({ update_id: 3, callback_query: { id: 'memory-3', from: { id: 7001 }, data: 'vita:memory', message: { chat: { id: 7001, type: 'private' } } } });
+  assert.equal(telegram.callbacks.length, 1, 'a retried button update cannot produce a duplicate response');
 });

@@ -42,6 +42,23 @@ export function createApp({ config, store, memory, chat, telegram = { configured
   app.use("/api", sessions.load);
   const coordination = createCoordination(store);
   const conversationMemory = createConversationMemory({ store, memory });
+  const telegramMenu = {
+    replyMarkup: {
+      inline_keyboard: [
+        [
+          { text: "💬 Ask Vita", callback_data: "vita:ask" },
+          { text: "🧠 How memory works", callback_data: "vita:memory" },
+        ],
+        [{ text: "🌐 Open VitaRecall", url: config.appOrigin }],
+        [{ text: "Disconnect Telegram", callback_data: "vita:disconnect" }],
+      ],
+    },
+  };
+  const telegramGuestMenu = {
+    replyMarkup: {
+      inline_keyboard: [[{ text: "🌐 Open VitaRecall", url: config.appOrigin }]],
+    },
+  };
   function initialAutomaticMemory(value) {
     if (value === undefined) return true;
     if (typeof value !== 'boolean') fail(400, 'Automatic memory must be true or false.');
@@ -510,17 +527,29 @@ export function createApp({ config, store, memory, chat, telegram = { configured
     if (!telegram.configured || !telegram.verifyWebhook(req.headers["x-telegram-bot-api-secret-token"])) return res.status(401).json({ ok: false });
     const updateId = req.body?.update_id;
     const message = req.body?.message;
-    if (!Number.isSafeInteger(updateId) || !message || typeof message !== "object") return res.json({ ok: true });
+    const callback = req.body?.callback_query;
+    if (!Number.isSafeInteger(updateId) || (!message && !callback) || (message && typeof message !== "object") || (callback && typeof callback !== "object")) return res.json({ ok: true });
     const recorded = await store.run("INSERT INTO telegram_updates (update_id,created_at) VALUES (?,?) ON CONFLICT(update_id) DO NOTHING", String(updateId), now());
     if (!Number(recorded.changes)) return res.json({ ok: true });
-    const chatId = message.chat?.id;
-    const telegramUserId = message.from?.id;
-    const text = typeof message.text === "string" ? message.text.trim() : "";
-    if (message.chat?.type !== "private" || !Number.isSafeInteger(chatId) || !Number.isSafeInteger(telegramUserId) || message.from?.is_bot) return res.json({ ok: true });
-    const send = async value => { try { await telegram.sendText(String(chatId), value); } catch { console.error("Telegram delivery was unavailable."); } };
+    const source = callback ? callback.message : message;
+    const chatId = source?.chat?.id;
+    const telegramUserId = callback ? callback.from?.id : message.from?.id;
+    const text = typeof message?.text === "string" ? message.text.trim() : "";
+    const sender = callback ? callback.from : message.from;
+    const answer = async value => {
+      if (!callback?.id) return;
+      try { await telegram.answerCallbackQuery(callback.id, value); }
+      catch { console.error("Telegram callback acknowledgement was unavailable."); }
+    };
+    if (source?.chat?.type !== "private" || !Number.isSafeInteger(chatId) || !Number.isSafeInteger(telegramUserId) || sender?.is_bot) {
+      await answer("Please use Vita in a private Telegram chat.");
+      return res.json({ ok: true });
+    }
+    const send = async (value, options) => { try { await telegram.sendText(String(chatId), value, options); } catch { console.error("Telegram delivery was unavailable."); } };
+    const connectionFor = () => store.get("SELECT c.*,p.user_id,u.role,u.name,u.email,d.username FROM telegram_connections c JOIN patients p ON p.id=c.patient_id JOIN users u ON u.id=c.user_id LEFT JOIN demo_profiles d ON d.user_id=u.id WHERE c.telegram_user_id=? AND c.chat_id=?", String(telegramUserId), String(chatId));
     const start = /^\/start(?:@\w+)?(?:\s+([A-Za-z0-9_-]{20,128}))?\s*$/i.exec(text);
     if (start) {
-      if (!start[1]) { await send("Welcome to Vita. To protect your private workspace, open VitaRecall on the web, go to Settings, choose Connect Telegram, then return here through the secure link."); return res.json({ ok: true }); }
+      if (!start[1]) { await send("Welcome to Vita. To protect your private workspace, open VitaRecall on the web, go to Settings, choose Connect Telegram, then return here through the secure link.", telegramGuestMenu); return res.json({ ok: true }); }
       const linked = await store.transaction(async tx => {
         const token = await tx.get("SELECT * FROM telegram_link_tokens WHERE token_hash=? AND expires_at>?", hash(start[1]), Date.now());
         if (!token) return { status: "expired" };
@@ -532,33 +561,55 @@ export function createApp({ config, store, memory, chat, telegram = { configured
         await tx.audit(token.user_id, token.patient_id, "telegram.connected");
         return { status: "linked" };
       });
-      if (linked.status === "linked") await send("You’re connected to your Vita workspace. Send a message whenever you need support. Your chat shares the same history and automatic Walrus memory setting as the VitaRecall website. This is a fictional-data demo: do not send real health information or use Vita for emergencies. Send /disconnect anytime.");
-      else if (linked.status === "other") await send("This Telegram account is already linked to another Vita workspace. Disconnect it there first, then try again.");
-      else await send("That connection link is invalid or has expired. Open VitaRecall → Settings → Telegram and create a new one.");
+      if (linked.status === "linked") await send("You’re connected to your Vita workspace. Send a message whenever you need support. Your chat shares the same history and automatic Walrus memory setting as the VitaRecall website. This is a fictional-data demo: do not send real health information or use Vita for emergencies.", telegramMenu);
+      else if (linked.status === "other") await send("This Telegram account is already linked to another Vita workspace. Disconnect it there first, then try again.", telegramGuestMenu);
+      else await send("That connection link is invalid or has expired. Open VitaRecall → Settings → Telegram and create a new one.", telegramGuestMenu);
+      return res.json({ ok: true });
+    }
+    const connection = await connectionFor();
+    if (callback) {
+      if (!connection) {
+        await answer("Connect your Vita workspace first.");
+        await send("To use Vita here, open VitaRecall on the web, go to Settings, and choose Connect Telegram. The one-time link keeps your workspace private.", telegramGuestMenu);
+        return res.json({ ok: true });
+      }
+      if (callback.data === "vita:ask") {
+        await answer("Type your question below.");
+        await send("What’s on your mind? I’m here to help you prepare for routine care, discuss health questions, and remember your earlier fictional test chats.", telegramMenu);
+      } else if (callback.data === "vita:memory") {
+        await answer("Here’s how Vita remembers.");
+        await send("Vita keeps your website and Telegram chat in one private workspace. When automatic Walrus memory is on, completed exchanges are queued to Walrus and later recalled for relevant follow-up. You can pause automatic memory from VitaRecall at any time. This demo is for fictional test data only, not emergencies or real medical care.", telegramMenu);
+      } else if (callback.data === "vita:disconnect") {
+        await store.transaction(async tx => {
+          await tx.run("DELETE FROM telegram_connections WHERE telegram_user_id=? AND chat_id=?", String(telegramUserId), String(chatId));
+          await tx.audit(connection.user_id, connection.patient_id, "telegram.disconnected");
+        });
+        await answer("Telegram disconnected.");
+        await send("Telegram is disconnected from VitaRecall. Your prior website chat and stored Walrus memories were not deleted.");
+      } else await answer("That option is no longer available.");
       return res.json({ ok: true });
     }
     if (/^\/disconnect(?:@\w+)?\s*$/i.test(text)) {
-      const connection = await store.get("SELECT * FROM telegram_connections WHERE telegram_user_id=? AND chat_id=?", String(telegramUserId), String(chatId));
       if (connection) {
         await store.transaction(async tx => {
-          await tx.run("DELETE FROM telegram_connections WHERE telegram_user_id=?", String(telegramUserId));
+          await tx.run("DELETE FROM telegram_connections WHERE telegram_user_id=? AND chat_id=?", String(telegramUserId), String(chatId));
           await tx.audit(connection.user_id, connection.patient_id, "telegram.disconnected");
         });
         await send("Telegram is disconnected from VitaRecall. Your prior website chat and stored Walrus memories were not deleted.");
       } else await send("This Telegram account is not currently connected to a Vita workspace.");
       return res.json({ ok: true });
     }
-    const connection = await store.get("SELECT c.*,p.user_id,u.role,u.name,u.email,d.username FROM telegram_connections c JOIN patients p ON p.id=c.patient_id JOIN users u ON u.id=c.user_id LEFT JOIN demo_profiles d ON d.user_id=u.id WHERE c.telegram_user_id=? AND c.chat_id=?", String(telegramUserId), String(chatId));
-    if (!connection) { await send("To chat with Vita here, open VitaRecall on the web, go to Settings, and choose Connect Telegram. The one-time link keeps your workspace private."); return res.json({ ok: true }); }
-    if (!text) { await send("I can currently read text messages. Please send your question as text, or use /disconnect to unlink this account."); return res.json({ ok: true }); }
+    if (!connection) { await send("To chat with Vita here, open VitaRecall on the web, go to Settings, and choose Connect Telegram. The one-time link keeps your workspace private.", telegramGuestMenu); return res.json({ ok: true }); }
+    if (/^\/(?:menu|help)(?:@\w+)?\s*$/i.test(text)) { await send("Choose an option below, or simply type your question and Vita will respond.", telegramMenu); return res.json({ ok: true }); }
+    if (!text) { await send("I can currently read text messages. Please send your question as text, choose an option below, or use /disconnect to unlink this account.", telegramMenu); return res.json({ ok: true }); }
     const limit = await coordination.consume(`cost:telegram:${connection.user_id}`, 12, 60000);
-    if (!limit.allowed) { await send("Please wait a minute before sending another message."); return res.json({ ok: true }); }
+    if (!limit.allowed) { await send("Please wait a minute before sending another message.", telegramMenu); return res.json({ ok: true }); }
     try {
       const response = await completeChat({ patient: connection, user: { id: connection.user_id, role: connection.role, memorySyncDeadline: req.memorySyncDeadline }, message: input(text, "Message", 4000), rid: `telegram-${updateId}` });
-      await send(response.assistantMessage.text);
+      await send(response.assistantMessage.text, telegramMenu);
     } catch (error) {
       console.error("Telegram chat could not complete:", error.code || error.name);
-      await send(error.code === "LLM_NOT_CONFIGURED" ? "Vita’s chat service is not connected yet. Please try again later." : "I’m sorry — I could not complete that just now. Please try again shortly.");
+      await send(error.code === "LLM_NOT_CONFIGURED" ? "Vita’s chat service is not connected yet. Please try again later." : "I’m sorry — I could not complete that just now. Please try again shortly.", telegramMenu);
     }
     res.json({ ok: true });
   });
