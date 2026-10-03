@@ -44,6 +44,8 @@ test("provider and database secrets cannot be exposed through Vite prefixes", ()
 test("deployment headers and function exclusions protect private data", () => {
   const headers = config.routes[0].headers;
   assert.match(headers["Content-Security-Policy"], /connect-src 'self'/);
+  assert.match(headers["Content-Security-Policy"], /script-src 'self' https:\/\/telegram\.org/);
+  assert.match(headers["Content-Security-Policy"], /frame-src https:\/\/telegram\.org https:\/\/oauth\.telegram\.org/);
   assert.equal(headers["X-Frame-Options"], "DENY");
   const excluded = config.functions["api/index.js"].excludeFiles;
   assert.match(excluded, /data\/\*\*/);
