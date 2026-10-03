@@ -129,7 +129,17 @@
 .telegram-link p, .telegram-activate p { margin: 0; }
 .telegram-link .button { width: fit-content; }
 .telegram-activate { border-top: 1px solid var(--line); padding-top: .85rem; display: grid; gap: .45rem; }
+.welcome-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 15px; }
+.welcome-actions .welcome-cta { margin-top: 0; }
+.telegram-quick-access { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #1391c5; border-radius: 9px; background: #229ed9; color: #fff; padding: 9px 12px; min-height: 38px; font-size: 10px; font-weight: 800; text-decoration: none; white-space: nowrap; }
+button.telegram-quick-access { font: inherit; cursor: pointer; }
+.telegram-quick-access:hover:not(:disabled) { background: #1689c1; }
+.telegram-quick-access.compact { min-height: 31px; padding: 6px 8px; border-radius: 7px; font-size: 9px; }
+.chat-panel-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 @media (max-width: 730px) {
+  .welcome-actions .telegram-quick-access { display: none; }
+  .chat-panel-actions { gap: 7px; }
+  .telegram-quick-access.compact { min-height: 36px; padding: 7px 8px; font-size: 10px; }
   .compact-chat .conversation { overscroll-behavior-y: contain; }
   .compact-chat .topbar, .mobile-nav { backdrop-filter: none; background: #fcfffb; }
   .new-messages-button { bottom: 125px; min-height: 44px; }
