@@ -141,9 +141,11 @@ export function createApp({ config, store, memory, chat, telegram = { configured
     await store.audit(profile.user_id, null, "demo.restored");
     res.json(sessionPayload(req));
   });
-  app.post("/api/auth/telegram", async (req, res) => {
+  function telegramProfile(payload) {
     if (!config.telegramBotToken || !config.telegramBotUsername) fail(503, "Telegram sign-in is not configured yet.", "TELEGRAM_LOGIN_NOT_CONFIGURED");
-    const profile = verifyTelegramLogin(req.body, config.telegramBotToken);
+    return verifyTelegramLogin(payload, config.telegramBotToken);
+  }
+  async function resolveTelegramAccount(req, profile) {
     const known = await store.get("SELECT user_id FROM external_identities WHERE provider='telegram' AND subject=?", profile.telegramId);
     if (req.user && (!known || known.user_id !== req.user.id)) fail(409, "Sign out before using a different Telegram account.", "TELEGRAM_ACCOUNT_MISMATCH");
     const findExisting = () => store.get("SELECT user_id FROM external_identities WHERE provider='telegram' AND subject=?", profile.telegramId);
@@ -180,8 +182,17 @@ export function createApp({ config, store, memory, chat, telegram = { configured
       if (!existing) throw error;
       account = { userId: existing.user_id, created: false };
     }
+    return account;
+  }
+  app.post("/api/auth/telegram", async (req, res) => {
+    const account = await resolveTelegramAccount(req, telegramProfile(req.body));
     await sessions.create(req, res, account.userId);
     res.status(account.created ? 201 : 200).json(sessionPayload(req));
+  });
+  app.get("/api/auth/telegram/callback", async (req, res) => {
+    const account = await resolveTelegramAccount(req, telegramProfile(req.query));
+    await sessions.create(req, res, account.userId);
+    res.redirect(303, config.appOrigin);
   });
   app.post("/api/auth/register", async (req, res) => {
     const automaticMemory = initialAutomaticMemory(req.body.automaticMemory);

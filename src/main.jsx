@@ -70,43 +70,21 @@ function TelegramSettings({ telegram, busy, onConnect, onDisconnect, onActivate 
   </section>;
 }
 
-function TelegramLoginButton({ botUsername, onSession }) {
+function TelegramLoginButton({ botUsername }) {
   const target = useRef(null);
-  const onSessionRef = useRef(onSession);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { onSessionRef.current = onSession; }, [onSession]);
   useEffect(() => {
     if (!botUsername || !target.current) return undefined;
-    let active = true;
-    const callbackName = "vitaTelegramLogin";
-    const previous = window[callbackName];
-    const authenticate = async data => {
-      if (!active) return;
-      setBusy(true); setError("");
-      try { onSessionRef.current(await api("/auth/telegram", { method: "POST", body: data })); }
-      catch (reason) { if (active) setError(reason.message); }
-      finally { if (active) setBusy(false); }
-    };
-    window[callbackName] = authenticate;
     const script = document.createElement("script");
     script.async = true;
     script.src = "https://telegram.org/js/telegram-widget.js?22";
     script.dataset.telegramLogin = botUsername;
     script.dataset.size = "large";
     script.dataset.radius = "12";
-    script.dataset.onauth = `${callbackName}(user)`;
+    script.dataset.authUrl = `${window.location.origin}/api/auth/telegram/callback`;
     target.current.replaceChildren(script);
-    return () => {
-      active = false;
-      script.remove();
-      if (window[callbackName] === authenticate) {
-        if (previous) window[callbackName] = previous;
-        else delete window[callbackName];
-      }
-    };
+    return () => script.remove();
   }, [botUsername]);
-  return <div className="telegram-login-control"><div ref={target} aria-label="Continue with Telegram" />{busy && <p className="small-text muted"><Spinner />Signing in securely…</p>}{error && <Notice type="error">{error}</Notice>}</div>;
+  return <div className="telegram-login-control"><div ref={target} aria-label="Continue with Telegram" /></div>;
 }
 
 function Auth({ onSession, signedOutName = "", services = {} }) {
@@ -129,7 +107,7 @@ function Auth({ onSession, signedOutName = "", services = {} }) {
   }
   return <main className="auth-layout">
     <section className="auth-story"><Brand light /><div className="auth-heading"><span className="eyebrow"><Sparkles size={14} /> CARE THAT REMEMBERS</span><h1>Your story.<br />Better connected.</h1><p>A calmer space to prepare for care, keep track of what matters, and pick up where you left off.</p></div><div className="auth-art"><img src={clinicianImage} alt="A friendly illustrated walrus clinician holding a tablet" /><div className="art-note"><ShieldCheck size={22} /><span><strong>A little continuity goes a long way.</strong><small>Patient-led memory. Clear sources.</small></span></div></div><p className="auth-footer">Made for patients. Connected with their care team.</p></section>
-    <section className="auth-form-section"><div className="mobile-brand"><Brand /></div><div className="auth-form-card"><VitaAvatar large /><p className="eyebrow">A CHATBOT THAT REMEMBERS</p><h2>{email ? register ? "Let's get to know you." : "Welcome back." : mode === "restore" ? "Pick up your story." : "Meet your walrus doc."}</h2><p className="muted">{email ? "Your existing email account still works here." : mode === "restore" ? "Use your private recovery code to reopen the same memory workspace, even on another device." : "Sign in with Telegram to reopen the same private workspace on any browser or device."}</p>{telegramLogin && <section className="telegram-login-card"><div><strong>Continue with Telegram</strong><p>Telegram securely confirms your account. Vita uses its unique Telegram ID, not an editable username, to find your existing chats and Walrus memories.</p></div><TelegramLoginButton botUsername={services.telegramBotUsername} onSession={onSession} /></section>}<div className="auth-tabs"><button type="button" className={mode === "demo" ? "selected" : ""} onClick={() => { setMode("demo"); setError(""); }}>Try the demo</button><button type="button" className={mode === "restore" ? "selected" : ""} onClick={() => { setMode("restore"); setError(""); }}>Restore demo</button><button type="button" className={email ? "selected" : ""} onClick={() => { setMode("email"); setError(""); }}>Email account</button></div>
+    <section className="auth-form-section"><div className="mobile-brand"><Brand /></div><div className="auth-form-card"><VitaAvatar large /><p className="eyebrow">A CHATBOT THAT REMEMBERS</p><h2>{email ? register ? "Let's get to know you." : "Welcome back." : mode === "restore" ? "Pick up your story." : "Meet your walrus doc."}</h2><p className="muted">{email ? "Your existing email account still works here." : mode === "restore" ? "Use your private recovery code to reopen the same memory workspace, even on another device." : "Sign in with Telegram to reopen the same private workspace on any browser or device."}</p>{telegramLogin && <section className="telegram-login-card"><div><strong>Continue with Telegram</strong><p>Telegram securely confirms your account. Vita uses its unique Telegram ID, not an editable username, to find your existing chats and Walrus memories.</p></div><TelegramLoginButton botUsername={services.telegramBotUsername} /></section>}<div className="auth-tabs"><button type="button" className={mode === "demo" ? "selected" : ""} onClick={() => { setMode("demo"); setError(""); }}>Try the demo</button><button type="button" className={mode === "restore" ? "selected" : ""} onClick={() => { setMode("restore"); setError(""); }}>Restore demo</button><button type="button" className={email ? "selected" : ""} onClick={() => { setMode("email"); setError(""); }}>Email account</button></div>
       {email && <div className="email-mode"><button className={`text-button ${!register ? "selected" : ""}`} onClick={() => setEmailMode("login")}>Sign in</button><button className={`text-button ${register ? "selected" : ""}`} onClick={() => setEmailMode("register")}>Create account</button></div>}
       {signedOutName && <Notice>Signed out of <strong>{signedOutName}</strong>. Sign in with the same Telegram account to return to its protected workspace, or enter another username for a separate demo.</Notice>}
       <form onSubmit={submit} className="form-stack">

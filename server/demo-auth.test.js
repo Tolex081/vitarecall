@@ -43,7 +43,7 @@ async function harness(t) {
     state.patient = async () => (await state.request('GET', '/api/patients')).body.patients[0];
     return state;
   }
-  return { store, calls, memory, chat, client };
+  return { store, calls, memory, chat, client, base };
 }
 const patientUrl = (patient, route) => `/api/patients/${patient.id}/${route}`;
 const chatRequest = (message, extra = {}) => ({ message, requestId: randomUUID(), ...extra });
@@ -158,6 +158,18 @@ test('verified Telegram sign-in is unique across browsers and reopens a previous
   assert.equal(claimed.body.user.id, demo.body.user.id);
   assert.equal((await third.patient()).id, demoPatient.id);
   assert.equal((await app.store.get("SELECT subject FROM external_identities WHERE provider='telegram' AND user_id=?", demo.body.user.id)).subject, '8008');
+});
+
+test('Telegram signed redirect creates a session without requiring an unsafe browser callback', async t => {
+  const app = await harness(t);
+  const payload = telegramLogin({ id: 9009 });
+  const redirect = await fetch(`${app.base}/api/auth/telegram/callback?${new URLSearchParams(payload)}`, { redirect: 'manual' });
+  assert.equal(redirect.status, 303);
+  assert.equal(redirect.headers.get('location'), origin);
+  const cookie = redirect.headers.get('set-cookie').split(';')[0];
+  const session = await fetch(`${app.base}/api/session`, { headers: { Cookie: cookie } }).then(response => response.json());
+  assert.equal(session.user.authProvider, 'telegram');
+  assert.equal(session.user.name, 'Ada Okafor');
 });
 
 test('only the matching private recovery code restores the same demo namespace on another device', async t => {
