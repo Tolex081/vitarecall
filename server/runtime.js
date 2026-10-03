@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { createMemoryService } from "./memory.js";
 import { createChatService } from "./llm.js";
 import { createBackgroundRunner } from "./background.js";
+import { createTelegramService } from "./telegram.js";
 
 // Create one reusable app/pool per process, never a SQLite database in /tmp.
 // Migrations are an explicit deployment step, not a cold-start side effect.
@@ -26,11 +27,12 @@ export async function createRuntime(config = loadConfig(), dependencies = {}) {
     }
     const memory = (dependencies.createMemoryService || createMemoryService)(config);
     const chat = (dependencies.createChatService || createChatService)(config);
+    const telegram = (dependencies.createTelegramService || createTelegramService)(config);
     const runInBackground = createBackgroundRunner({
       waitUntil: dependencies.waitUntil || platform?.waitUntil,
       getDeadline: dependencies.getDeadline || platform?.getDeadline,
     });
-    const app = (dependencies.createApp || createApp)({ config, store, memory, chat, runInBackground });
+    const app = (dependencies.createApp || createApp)({ config, store, memory, chat, telegram, runInBackground });
     return { app, config, store };
   } catch (error) {
     await store.close();

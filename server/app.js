@@ -22,7 +22,7 @@ const toMemory = (m) => ({ id: m.id, text: m.text, provenance: m.provenance, sta
 const toMessage = (m) => ({ id: m.id, role: m.role, text: m.text, sources: JSON.parse(m.sources_json), createdAt: m.created_at, ...(m.trace_json ? { memoryTrace: JSON.parse(m.trace_json) } : {}) });
 const toTask = (t) => ({ id: t.id, title: t.title, completed: Boolean(t.completed), createdAt: t.created_at });
 
-export function createApp({ config, store, memory, chat, runInBackground }) {
+export function createApp({ config, store, memory, chat, telegram = { configured: false, username: null, verifyWebhook: () => false }, runInBackground }) {
   const app = express();
   app.disable("x-powered-by");
   if (config.production) app.set("trust proxy", 1);
@@ -47,9 +47,10 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     if (typeof value !== 'boolean') fail(400, 'Automatic memory must be true or false.');
     return value;
   }
-  function startConversationSync(req, patient, state) {
-    if (!runInBackground || !memory.configured || patient.user_id !== req.user.id || !(state.counts.queued + state.counts.processing)) return;
-    try { runInBackground(() => conversationMemory.sync(patient.id, req.user.id), req.memorySyncDeadline); }
+  function startConversationSync(actor, patient, state) {
+    const user = actor.user || actor;
+    if (!runInBackground || !memory.configured || patient.user_id !== user.id || !(state.counts.queued + state.counts.processing)) return;
+    try { runInBackground(() => conversationMemory.sync(patient.id, user.id), actor.memorySyncDeadline || Date.now() + 120_000); }
     catch { console.error('Automatic memory scheduling was unavailable. The chat archive remains queued.'); }
   }
   const releaseLease = async lease => {
@@ -68,6 +69,7 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
   });
   app.use("/api", (req, _res, next) => {
     req.body ??= {};
+    if (req.path === "/telegram/webhook") return next();
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
       if (req.headers.origin && req.headers.origin !== config.appOrigin) fail(403, "Request origin is not allowed.");
       if (!req.is("application/json")) fail(415, "Send an application/json request.");
@@ -75,7 +77,8 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     }
     next();
   });
-  const services = () => ({ memoryConfigured: memory.configured, chatConfigured: chat.configured, model: chat.model, network: "mainnet", accountId: memory.accountId || null });
+  const services = () => ({ memoryConfigured: memory.configured, chatConfigured: chat.configured, model: chat.model, network: "mainnet", accountId: memory.accountId || null,
+    telegramConfigured: Boolean(telegram.configured), telegramBotUsername: telegram.username || null });
   const sessionPayload = (req) => ({ user: publicUser(req.user), csrfToken: req.session.csrf_token, services: services() });
   app.get("/api/session", async (req, res) => {
     if (!req.session) {
@@ -167,6 +170,7 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     res.json(sessionPayload(req));
   });
   app.use("/api", (req, _res, next) => {
+    if (req.path === "/telegram/webhook") return next();
     if (!req.user) fail(401, "Sign in to continue.", "AUTH_REQUIRED");
     next();
   });
@@ -189,6 +193,11 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     return patient;
   }
   const patientJSON = (p, user) => ({ id: p.id, name: p.name, email: p.username ? null : p.email, isDemo: Boolean(p.username), ...(p.username ? { username: p.username } : {}), memoryConsent: Boolean(p.memory_consent), canManageConsent: user.id === p.user_id, ...(user.id === p.user_id ? { careCode: p.care_code } : {}) });
+  async function telegramStatus(patient, userId) {
+    const canLink = patient.user_id === userId;
+    const connection = canLink ? await store.get("SELECT created_at FROM telegram_connections WHERE patient_id=? AND user_id=?", patient.id, userId) : null;
+    return { configured: Boolean(telegram.configured), botUsername: telegram.username || null, canLink, connected: Boolean(connection), ...(connection ? { linkedAt: connection.created_at } : {}) };
+  }
   const readMemories = async (id) => (await store.all("SELECT * FROM memories WHERE patient_id=? ORDER BY created_at DESC", id)).map(toMemory);
   const readMessages = async (id, userId) => {
     const cutoff = (await store.get("SELECT cutoff_sequence FROM chat_conversations WHERE patient_id=? AND user_id=?", id, userId))?.cutoff_sequence || 0;
@@ -212,16 +221,17 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
   });
   app.get("/api/patients/:id/workspace", async (req, res) => {
     const p = await patientFor(req, req.params.id);
-    const [messages, memories, notes, tasks, careTeam, stats, automaticMemory] = await Promise.all([
+    const [messages, memories, notes, tasks, careTeam, stats, automaticMemory, telegramConnection] = await Promise.all([
       readMessages(p.id, req.user.id), readMemories(p.id), readNotes(p.id), readTasks(p.id),
       store.all("SELECT u.id,u.name,d.username FROM care_team c JOIN users u ON u.id=c.clinician_id LEFT JOIN demo_profiles d ON d.user_id=u.id WHERE c.patient_id=?", p.id),
       store.get("SELECT COUNT(DISTINCT blob_id) AS count FROM memories WHERE patient_id=? AND status='stored'", p.id),
       conversationMemory.state(p.id, req.user.id),
+      telegramStatus(p, req.user.id),
     ]);
     await patientFor(req, p.id);
     res.json({ patient: patientJSON(p, req.user), messages, memories, notes, tasks, conversationMemory: automaticMemory,
       careTeam: careTeam.map(member => ({ ...member, isDemo: Boolean(member.username) })),
-      stats: { storedBlobs: Number(stats.count), accountId: memory.accountId || null, network: "mainnet" }, services: services() });
+      stats: { storedBlobs: Number(stats.count), accountId: memory.accountId || null, network: "mainnet" }, telegram: telegramConnection, services: services() });
   });
   app.patch("/api/patients/:id/consent", async (req, res) => {
     const p = await patientFor(req, req.params.id);
@@ -267,6 +277,29 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     if (req.user.id !== p.user_id) fail(403, "Only the patient can change their care code.");
     await store.run("UPDATE patients SET care_code=? WHERE id=?", randomBytes(10).toString("hex").toUpperCase(), p.id);
     res.json({ patient: patientJSON(await patientFor(req, p.id), req.user) });
+  });
+  app.post("/api/patients/:id/telegram/link", async (req, res) => {
+    const p = await patientFor(req, req.params.id);
+    if (p.user_id !== req.user.id) fail(403, "Only the patient can link their Telegram account.");
+    if (!telegram.configured) fail(503, "Telegram is not configured yet. Add the server-only bot settings first.", "TELEGRAM_NOT_CONFIGURED");
+    const plainToken = randomBytes(32).toString("base64url");
+    const expiresAt = Date.now() + 10 * 60_000;
+    await store.transaction(async tx => {
+      await tx.run("DELETE FROM telegram_link_tokens WHERE patient_id=? OR expires_at<?", p.id, Date.now());
+      await tx.run("INSERT INTO telegram_link_tokens (token_hash,patient_id,user_id,expires_at,created_at) VALUES (?,?,?,?,?)", hash(plainToken), p.id, req.user.id, expiresAt, now());
+      await tx.audit(req.user.id, p.id, "telegram.link_requested");
+    });
+    res.json({ startUrl: telegram.linkUrl(plainToken), expiresAt, botUsername: telegram.username });
+  });
+  app.delete("/api/patients/:id/telegram", async (req, res) => {
+    const p = await patientFor(req, req.params.id);
+    if (p.user_id !== req.user.id) fail(403, "Only the patient can disconnect their Telegram account.");
+    await store.transaction(async tx => {
+      await tx.run("DELETE FROM telegram_connections WHERE patient_id=? AND user_id=?", p.id, req.user.id);
+      await tx.run("DELETE FROM telegram_link_tokens WHERE patient_id=? AND user_id=?", p.id, req.user.id);
+      await tx.audit(req.user.id, p.id, "telegram.disconnected");
+    });
+    res.json({ telegram: await telegramStatus(p, req.user.id) });
   });
   app.delete("/api/patients/:id/care-team/:clinicianId", async (req, res) => {
     const p = await patientFor(req, req.params.id);
@@ -332,72 +365,77 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
       res.json({ messages: [] });
     } finally { await releaseLease(lease); }
   });
-  app.post("/api/patients/:id/chat", async (req, res) => {
-    const p = await patientFor(req, req.params.id);
-    const message = input(req.body.message, "Message", 4000);
-    const rid = requestId(req.body.requestId);
-    if (req.body.freshConversation !== undefined && typeof req.body.freshConversation !== "boolean") fail(400, "Fresh conversation must be true or false.");
+  async function assertChatAccess(patient, user, db = store) {
+    const patientId = patient.id || patient.patient_id;
+    const fresh = await db.get("SELECT p.*,u.name,u.email,d.username FROM patients p JOIN users u ON u.id=p.user_id LEFT JOIN demo_profiles d ON d.user_id=u.id WHERE p.id=?", patientId);
+    if (!fresh || (fresh.user_id !== user.id && !await db.get("SELECT 1 FROM care_team WHERE patient_id=? AND clinician_id=?", patientId, user.id))) fail(404, "Patient workspace was not found.");
+    return fresh;
+  }
+  async function completeChat({ patient, user, message, rid, freshConversation = false }) {
     if (!chat.configured) fail(503, "Gemini is not connected yet. Add GEMINI_API_KEY on the server.", "LLM_NOT_CONFIGURED");
-    const existing = await store.get("SELECT * FROM chat_requests WHERE patient_id=? AND user_id=? AND request_id=?", p.id, req.user.id, rid);
-    if (existing?.state === "done") return res.json({ ...JSON.parse(existing.response_json), conversationMemory: await conversationMemory.state(p.id, req.user.id) });
+    const p = await assertChatAccess(patient, user);
+    const existing = await store.get("SELECT * FROM chat_requests WHERE patient_id=? AND user_id=? AND request_id=?", p.id, user.id, rid);
+    if (existing?.state === "done") return { ...JSON.parse(existing.response_json), conversationMemory: await conversationMemory.state(p.id, user.id) };
     if (existing && existing.state !== "failed") fail(409, "This request was already received. Refresh the conversation before retrying.");
-    const lease = await coordination.acquire(`chat:${p.id}:${req.user.id}`);
+    const lease = await coordination.acquire(`chat:${p.id}:${user.id}`);
     if (!lease) fail(409, "Wait for Vita's current reply before sending another message.");
     let requestCreated = false;
     try {
-      // A confirmed failure has no committed exchange and can be retried under
-      // the same idempotency key. Never reopen an uncertain pending request or
-      // a completed request: they may already have produced a reply/archive.
-      const inserted = await store.run("INSERT INTO chat_requests VALUES (?,?,?,?,?,?) ON CONFLICT(patient_id,user_id,request_id) DO UPDATE SET state='pending',response_json=NULL,created_at=excluded.created_at WHERE chat_requests.state='failed'", p.id, req.user.id, rid, "pending", null, now());
+      const inserted = await store.run("INSERT INTO chat_requests VALUES (?,?,?,?,?,?) ON CONFLICT(patient_id,user_id,request_id) DO UPDATE SET state='pending',response_json=NULL,created_at=excluded.created_at WHERE chat_requests.state='failed'", p.id, user.id, rid, "pending", null, now());
       if (!Number(inserted.changes)) {
-        const duplicate = await store.get("SELECT * FROM chat_requests WHERE patient_id=? AND user_id=? AND request_id=?", p.id, req.user.id, rid);
-        if (duplicate?.state === "done") return res.json({ ...JSON.parse(duplicate.response_json), conversationMemory: await conversationMemory.state(p.id, req.user.id) });
+        const duplicate = await store.get("SELECT * FROM chat_requests WHERE patient_id=? AND user_id=? AND request_id=?", p.id, user.id, rid);
+        if (duplicate?.state === "done") return { ...JSON.parse(duplicate.response_json), conversationMemory: await conversationMemory.state(p.id, user.id) };
         fail(409, "This request was already received. Refresh the conversation before retrying.");
       }
       requestCreated = true;
-      const automaticMemoryEnabled = p.user_id === req.user.id && await conversationMemory.enabled(p.id, req.user.id);
-      const cutoff = await lastMessageSequence(p.id, req.user.id);
-      const history = req.body.freshConversation ? [] : (await readMessages(p.id, req.user.id)).slice(-20);
+      const automaticMemoryEnabled = p.user_id === user.id && await conversationMemory.enabled(p.id, user.id);
+      const cutoff = await lastMessageSequence(p.id, user.id);
+      const history = freshConversation ? [] : (await readMessages(p.id, user.id)).slice(-20);
       let memories = [], memoryStatus = memory.configured ? "empty" : "not-configured";
       if (memory.configured) {
         try {
           const recent = history.filter(turn => turn.role === 'user').slice(-2).map(turn => turn.text.slice(0, 600)).join('\n');
           const query = recent ? `${message}\nRecent context: ${recent}` : `${message}\nRelevant earlier context: preferred name, care concerns, preferences, restrictions, previous questions.`;
-          const recalledContext = await recallContext(query, p.id, req.user.id);
+          const recalledContext = await recallContext(query, p.id, user.id);
           memories = recalledContext.memories;
           memoryStatus = recalledContext.status;
         } catch {
-          // An unavailable retrieval service must not prevent a general answer.
-          // Keep the lack of recalled context explicit in both model and UI.
           memoryStatus = "unavailable";
-          await store.audit(req.user.id, p.id, "memory.recall_unavailable");
+          await store.audit(user.id, p.id, "memory.recall_unavailable");
         }
       }
-      await patientFor(req, p.id);
-      const text = await chat.respond({ role: req.user.role, message, history, memories, memoryStatus, automaticMemoryEnabled,
+      await assertChatAccess(p, user);
+      const text = await chat.respond({ role: user.role, message, history, memories, memoryStatus, automaticMemoryEnabled,
         profile: { name: p.name, username: p.username || null, isDemo: Boolean(p.username) } });
-      await patientFor(req, p.id);
+      await assertChatAccess(p, user);
       const userMessage = { id: randomUUID(), role: "user", text: message, createdAt: now(), sources: [] };
       const assistantMessage = { id: randomUUID(), role: "assistant", text, createdAt: now(), sources: memories,
         memoryTrace: { status: memoryStatus, sourceCount: memories.length, historyUsed: history.length > 0 } };
       const response = { userMessage, assistantMessage };
       await store.transaction(async tx => {
         await coordination.assert(lease, tx);
-        await patientFor(req, p.id, tx);
-        if (req.body.freshConversation) await resetConversation(p.id, req.user.id, cutoff, tx);
-        for (const m of [userMessage, assistantMessage]) await tx.run("INSERT INTO messages (id,patient_id,user_id,role,text,sources_json,created_at) VALUES (?,?,?,?,?,?,?)", m.id, p.id, req.user.id, m.role, m.text, JSON.stringify(m.sources), m.createdAt);
+        await assertChatAccess(p, user, tx);
+        if (freshConversation) await resetConversation(p.id, user.id, cutoff, tx);
+        for (const m of [userMessage, assistantMessage]) await tx.run("INSERT INTO messages (id,patient_id,user_id,role,text,sources_json,created_at) VALUES (?,?,?,?,?,?,?)", m.id, p.id, user.id, m.role, m.text, JSON.stringify(m.sources), m.createdAt);
         await tx.run("INSERT INTO message_memory_traces VALUES (?,?)", assistantMessage.id, JSON.stringify(assistantMessage.memoryTrace));
-        if (automaticMemoryEnabled) await conversationMemory.queue(tx, { patientId: p.id, userId: req.user.id, requestId: rid, messages: [userMessage, assistantMessage] });
-        await tx.run("UPDATE chat_requests SET state='done',response_json=? WHERE patient_id=? AND user_id=? AND request_id=?", JSON.stringify(response), p.id, req.user.id, rid);
-        await tx.audit(req.user.id, p.id, "chat.completed");
+        if (automaticMemoryEnabled) await conversationMemory.queue(tx, { patientId: p.id, userId: user.id, requestId: rid, messages: [userMessage, assistantMessage] });
+        await tx.run("UPDATE chat_requests SET state='done',response_json=? WHERE patient_id=? AND user_id=? AND request_id=?", JSON.stringify(response), p.id, user.id, rid);
+        await tx.audit(user.id, p.id, "chat.completed");
       });
-      const archive = await conversationMemory.state(p.id, req.user.id);
-      startConversationSync(req, p, archive);
-      res.json({ ...response, conversationMemory: archive });
+      const archive = await conversationMemory.state(p.id, user.id);
+      startConversationSync(user, p, archive);
+      return { ...response, conversationMemory: archive };
     } catch (error) {
-      if (requestCreated) await store.run("UPDATE chat_requests SET state='failed' WHERE patient_id=? AND user_id=? AND request_id=? AND state='pending'", p.id, req.user.id, rid);
+      if (requestCreated) await store.run("UPDATE chat_requests SET state='failed' WHERE patient_id=? AND user_id=? AND request_id=? AND state='pending'", p.id, user.id, rid);
       throw error;
     } finally { await releaseLease(lease); }
+  }
+  app.post("/api/patients/:id/chat", async (req, res) => {
+    const message = input(req.body.message, "Message", 4000);
+    const rid = requestId(req.body.requestId);
+    if (req.body.freshConversation !== undefined && typeof req.body.freshConversation !== "boolean") fail(400, "Fresh conversation must be true or false.");
+    const p = await patientFor(req, req.params.id);
+    res.json(await completeChat({ patient: p, user: { ...req.user, memorySyncDeadline: req.memorySyncDeadline }, message, rid, freshConversation: Boolean(req.body.freshConversation) }));
   });
   app.post("/api/patients/:id/memories", async (req, res) => {
     const p = await patientFor(req, req.params.id);
@@ -468,7 +506,69 @@ export function createApp({ config, store, memory, chat, runInBackground }) {
     await store.run("UPDATE tasks SET completed=? WHERE id=?", Number(req.body.completed), task.id);
     res.json({ task: toTask(await store.get("SELECT * FROM tasks WHERE id=?", task.id)) });
   });
+  app.post("/api/telegram/webhook", async (req, res) => {
+    if (!telegram.configured || !telegram.verifyWebhook(req.headers["x-telegram-bot-api-secret-token"])) return res.status(401).json({ ok: false });
+    const updateId = req.body?.update_id;
+    const message = req.body?.message;
+    if (!Number.isSafeInteger(updateId) || !message || typeof message !== "object") return res.json({ ok: true });
+    const recorded = await store.run("INSERT INTO telegram_updates (update_id,created_at) VALUES (?,?) ON CONFLICT(update_id) DO NOTHING", String(updateId), now());
+    if (!Number(recorded.changes)) return res.json({ ok: true });
+    const chatId = message.chat?.id;
+    const telegramUserId = message.from?.id;
+    const text = typeof message.text === "string" ? message.text.trim() : "";
+    if (message.chat?.type !== "private" || !Number.isSafeInteger(chatId) || !Number.isSafeInteger(telegramUserId) || message.from?.is_bot) return res.json({ ok: true });
+    const send = async value => { try { await telegram.sendText(String(chatId), value); } catch { console.error("Telegram delivery was unavailable."); } };
+    const start = /^\/start(?:@\w+)?(?:\s+([A-Za-z0-9_-]{20,128}))?\s*$/i.exec(text);
+    if (start) {
+      if (!start[1]) { await send("Welcome to Vita. To protect your private workspace, open VitaRecall on the web, go to Settings, choose Connect Telegram, then return here through the secure link."); return res.json({ ok: true }); }
+      const linked = await store.transaction(async tx => {
+        const token = await tx.get("SELECT * FROM telegram_link_tokens WHERE token_hash=? AND expires_at>?", hash(start[1]), Date.now());
+        if (!token) return { status: "expired" };
+        const existing = await tx.get("SELECT * FROM telegram_connections WHERE telegram_user_id=?", String(telegramUserId));
+        if (existing && existing.patient_id !== token.patient_id) return { status: "other" };
+        await tx.run("DELETE FROM telegram_connections WHERE patient_id=?", token.patient_id);
+        await tx.run("INSERT INTO telegram_connections (telegram_user_id,chat_id,patient_id,user_id,created_at,updated_at) VALUES (?,?,?,?,?,?)", String(telegramUserId), String(chatId), token.patient_id, token.user_id, now(), now());
+        await tx.run("DELETE FROM telegram_link_tokens WHERE token_hash=?", token.token_hash);
+        await tx.audit(token.user_id, token.patient_id, "telegram.connected");
+        return { status: "linked" };
+      });
+      if (linked.status === "linked") await send("You’re connected to your Vita workspace. Send a message whenever you need support. Your chat shares the same history and automatic Walrus memory setting as the VitaRecall website. This is a fictional-data demo: do not send real health information or use Vita for emergencies. Send /disconnect anytime.");
+      else if (linked.status === "other") await send("This Telegram account is already linked to another Vita workspace. Disconnect it there first, then try again.");
+      else await send("That connection link is invalid or has expired. Open VitaRecall → Settings → Telegram and create a new one.");
+      return res.json({ ok: true });
+    }
+    if (/^\/disconnect(?:@\w+)?\s*$/i.test(text)) {
+      const connection = await store.get("SELECT * FROM telegram_connections WHERE telegram_user_id=? AND chat_id=?", String(telegramUserId), String(chatId));
+      if (connection) {
+        await store.transaction(async tx => {
+          await tx.run("DELETE FROM telegram_connections WHERE telegram_user_id=?", String(telegramUserId));
+          await tx.audit(connection.user_id, connection.patient_id, "telegram.disconnected");
+        });
+        await send("Telegram is disconnected from VitaRecall. Your prior website chat and stored Walrus memories were not deleted.");
+      } else await send("This Telegram account is not currently connected to a Vita workspace.");
+      return res.json({ ok: true });
+    }
+    const connection = await store.get("SELECT c.*,p.user_id,u.role,u.name,u.email,d.username FROM telegram_connections c JOIN patients p ON p.id=c.patient_id JOIN users u ON u.id=c.user_id LEFT JOIN demo_profiles d ON d.user_id=u.id WHERE c.telegram_user_id=? AND c.chat_id=?", String(telegramUserId), String(chatId));
+    if (!connection) { await send("To chat with Vita here, open VitaRecall on the web, go to Settings, and choose Connect Telegram. The one-time link keeps your workspace private."); return res.json({ ok: true }); }
+    if (!text) { await send("I can currently read text messages. Please send your question as text, or use /disconnect to unlink this account."); return res.json({ ok: true }); }
+    const limit = await coordination.consume(`cost:telegram:${connection.user_id}`, 12, 60000);
+    if (!limit.allowed) { await send("Please wait a minute before sending another message."); return res.json({ ok: true }); }
+    try {
+      const response = await completeChat({ patient: connection, user: { id: connection.user_id, role: connection.role, memorySyncDeadline: req.memorySyncDeadline }, message: input(text, "Message", 4000), rid: `telegram-${updateId}` });
+      await send(response.assistantMessage.text);
+    } catch (error) {
+      console.error("Telegram chat could not complete:", error.code || error.name);
+      await send(error.code === "LLM_NOT_CONFIGURED" ? "Vita’s chat service is not connected yet. Please try again later." : "I’m sorry — I could not complete that just now. Please try again shortly.");
+    }
+    res.json({ ok: true });
+  });
   app.post("/api/services/verify", async (_req, res) => res.json({ verification: await memory.verify() }));
+  app.post("/api/services/telegram/webhook", async (req, res) => {
+    if (!telegram.configured) fail(503, "Telegram is not configured yet. Add the server-only bot settings first.", "TELEGRAM_NOT_CONFIGURED");
+    await telegram.setWebhook(config.appOrigin);
+    await store.audit(req.user.id, null, "telegram.webhook_configured");
+    res.json({ configured: true, botUsername: telegram.username });
+  });
   app.use("/api", (_req, res) => res.status(404).json({ error: "API route was not found." }));
   const dist = path.resolve("dist");
   if (!config.vercel && existsSync(path.join(dist, "index.html"))) {

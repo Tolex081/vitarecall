@@ -36,5 +36,8 @@ export function loadConfig(env = process.env) {
     memwalUrl: env.MEMWAL_URL || "https://relayer.memory.walrus.xyz",
     geminiApiKey: env.GEMINI_API_KEY || "",
     geminiModel: env.GEMINI_MODEL || "gemini-3.1-flash-lite",
+    telegramBotToken: env.TELEGRAM_BOT_TOKEN || "",
+    telegramBotUsername: env.TELEGRAM_BOT_USERNAME || "",
+    telegramWebhookSecret: env.TELEGRAM_WEBHOOK_SECRET || "",
   };
 }

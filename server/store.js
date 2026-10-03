@@ -86,6 +86,19 @@ export function createStore(filename) {
     CREATE TABLE IF NOT EXISTS operation_locks (
       key TEXT PRIMARY KEY, token TEXT NOT NULL, expires_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS telegram_link_tokens (
+      token_hash TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id),
+      user_id TEXT NOT NULL REFERENCES users(id), expires_at INTEGER NOT NULL, created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS telegram_link_tokens_expiry ON telegram_link_tokens(expires_at);
+    CREATE TABLE IF NOT EXISTS telegram_connections (
+      telegram_user_id TEXT PRIMARY KEY, chat_id TEXT UNIQUE NOT NULL,
+      patient_id TEXT UNIQUE NOT NULL REFERENCES patients(id), user_id TEXT NOT NULL REFERENCES users(id),
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS telegram_updates (
+      update_id TEXT PRIMARY KEY, created_at TEXT NOT NULL
+    );
   `);
   // Queue the entire async transaction, not only individual statements.
   // Concurrent requests must never accidentally join another request's transaction.

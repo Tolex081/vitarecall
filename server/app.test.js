@@ -40,11 +40,22 @@ function fakeServices() {
   return { memory, chat, calls, receipts };
 }
 
-async function harness(t, { filename = ':memory:', services = fakeServices(), runInBackground } = {}) {
-  const state = { store: null, server: null, base: null, ...services };
+function fakeTelegram() {
+  const sent = [];
+  return {
+    configured: true, username: 'VitaRecallTestBot', sent,
+    verifyWebhook: value => value === 'telegram-test-secret',
+    async sendText(chatId, text) { sent.push({ chatId, text }); },
+    async setWebhook() { return true; },
+    linkUrl: token => `https://t.me/VitaRecallTestBot?start=${token}`,
+  };
+}
+
+async function harness(t, { filename = ':memory:', services = fakeServices(), telegram, runInBackground } = {}) {
+  const state = { store: null, server: null, base: null, telegram, ...services };
   async function start() {
     state.store = await createTestStore(filename);
-    const app = createApp({ config: testConfig, store: state.store, memory: services.memory, chat: services.chat, runInBackground });
+    const app = createApp({ config: testConfig, store: state.store, memory: services.memory, chat: services.chat, telegram, runInBackground });
     state.server = await new Promise((resolve) => {
       const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
     });
@@ -787,4 +798,26 @@ test('accounts, notes, tasks, chat exchanges and confirmed blob receipts survive
   assert.equal(login.status, 200);
   assert.equal(secondDevice.user.id, accountId);
   assert.equal((await secondDevice.request('GET', workspacePath(patient))).body.memories[0].blobId, 'persistent-test-blob');
+});
+
+test('a patient links Telegram once, then Telegram uses the same private chat history without accepting unsigned updates', async t => {
+  const telegram = fakeTelegram();
+  const app = await harness(t, { telegram });
+  const { client, patient } = await patientSetup(app);
+  const link = await client.request('POST', patientPath(patient, 'telegram/link'), {});
+  assert.equal(link.status, 200);
+  assert.match(link.body.startUrl, /^https:\/\/t\.me\/VitaRecallTestBot\?start=/);
+  const token = new URL(link.body.startUrl).searchParams.get('start');
+  const webhook = async (update, secret = 'telegram-test-secret') => fetch(`${app.base}/api/telegram/webhook`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...(secret ? { 'x-telegram-bot-api-secret-token': secret } : {}) }, body: JSON.stringify(update),
+  });
+  assert.equal((await webhook({ update_id: 1, message: { chat: { id: 7001, type: 'private' }, from: { id: 7001 }, text: `/start ${token}` } }, 'wrong')).status, 401);
+  assert.equal((await webhook({ update_id: 1, message: { chat: { id: 7001, type: 'private' }, from: { id: 7001 }, text: `/start ${token}` } })).status, 200);
+  assert.match(telegram.sent.at(-1).text, /connected to your Vita workspace/);
+  assert.equal((await webhook({ update_id: 2, message: { chat: { id: 7001, type: 'private' }, from: { id: 7001 }, text: 'Fictional question from Telegram.' } })).status, 200);
+  assert.equal(app.calls.chat.length, 1);
+  assert.equal(telegram.sent.at(-1).text, 'Test assistant response to: Fictional question from Telegram.');
+  assert.equal((await client.request('GET', workspacePath(patient))).body.messages.length, 2, 'website and Telegram share one patient conversation');
+  await webhook({ update_id: 2, message: { chat: { id: 7001, type: 'private' }, from: { id: 7001 }, text: 'Fictional question from Telegram.' } });
+  assert.equal(app.calls.chat.length, 1, 'a retried Telegram update cannot create a second reply');
 });

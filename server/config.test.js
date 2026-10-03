@@ -17,6 +17,9 @@ test("local configuration uses mainnet without inventing credentials", () => {
   assert.equal(config.memwalKey, "");
   assert.equal(config.memwalAccountId, "");
   assert.equal(config.geminiApiKey, "");
+  assert.equal(config.telegramBotToken, "");
+  assert.equal(config.telegramBotUsername, "");
+  assert.equal(config.telegramWebhookSecret, "");
   assert.equal(config.clinicianInviteCode, "");
   assert.equal(config.secureCookies, false);
   assert.equal(config.databaseUrl, "");
