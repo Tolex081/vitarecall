@@ -79,12 +79,12 @@ function TelegramLoginButton({ botUsername }) {
     script.src = "https://telegram.org/js/telegram-widget.js?22";
     script.dataset.telegramLogin = botUsername;
     script.dataset.size = "large";
-    script.dataset.radius = "12";
+    script.dataset.radius = "18";
     script.dataset.authUrl = `${window.location.origin}/api/auth/telegram/callback`;
     target.current.replaceChildren(script);
     return () => script.remove();
   }, [botUsername]);
-  return <div className="telegram-login-control"><div ref={target} aria-label="Continue with Telegram" /></div>;
+  return <div className="telegram-login-control"><div className="telegram-login-assurance"><span className="telegram-login-mark"><Send size={15} /></span><span><strong>Secure Telegram sign-in</strong><small>Telegram opens its own trusted authorization prompt.</small></span></div><div className="telegram-widget-frame"><div ref={target} aria-label="Continue with Telegram" /></div></div>;
 }
 
 function Auth({ onSession, signedOutName = "", services = {} }) {
