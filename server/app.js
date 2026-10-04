@@ -107,8 +107,8 @@ export function createApp({ config, store, memory, chat, telegram = { configured
     res.json(sessionPayload(req));
   });
   function demoUsername(value) {
-    const username = input(value, "X username", 16).replace(/^@/, "").toLowerCase();
-    if (!/^[a-z0-9_]{1,15}$/.test(username)) fail(400, "Use an X username with 1–15 letters, numbers, or underscores.");
+    const username = input(value, "Demo label", 16).replace(/^@/, "").toLowerCase();
+    if (!/^[a-z0-9_]{1,15}$/.test(username)) fail(400, "Use 1–15 letters, numbers, or underscores.");
     return username;
   }
   app.post("/api/auth/demo", async (req, res) => {
@@ -131,6 +131,24 @@ export function createApp({ config, store, memory, chat, telegram = { configured
     });
     await sessions.create(req, res, id);
     res.status(201).json({ ...sessionPayload(req), recoveryCode });
+  });
+  app.post("/api/auth/demo/quick", async (req, res) => {
+    // This public sandbox is intentionally a fresh, non-recoverable workspace.
+    // Returning users must use a verified Telegram account or email credentials.
+    const username = `demo_${randomBytes(5).toString("hex")}`;
+    const id = randomUUID(), recoveryCode = randomBytes(32).toString("base64url");
+    const createdAt = now();
+    const passwordHash = await hashPassword(randomBytes(32).toString("hex"));
+    await store.transaction(async tx => {
+      await tx.run("INSERT INTO users VALUES (?,?,?,?,?,?)", id, "Fictional demo", `${id}@demo.invalid`, passwordHash, "patient", createdAt);
+      await tx.run("INSERT INTO demo_profiles VALUES (?,?,?,?)", id, username, hash(recoveryCode), createdAt);
+      const patientId = randomUUID();
+      await tx.run("INSERT INTO patients (id,user_id,care_code) VALUES (?,?,?)", patientId, id, randomBytes(10).toString("hex").toUpperCase());
+      await conversationMemory.initialize(tx, patientId, id, true);
+      await tx.audit(id, null, "demo.quick_created");
+    });
+    await sessions.create(req, res, id);
+    res.status(201).json(sessionPayload(req));
   });
   app.post("/api/auth/demo/restore", async (req, res) => {
     const username = demoUsername(req.body.username);
@@ -201,7 +219,7 @@ export function createApp({ config, store, memory, chat, telegram = { configured
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "Enter a valid email address.");
     input(req.body.password, "Password", 128, 6);
     const password = req.body.password;
-    const role = req.body.role;
+    const role = req.body.role ?? "patient";
     if (!["patient", "clinician"].includes(role)) fail(400, "Choose patient or clinician.");
     if (role === "clinician" && (!config.clinicianInviteCode || !equal(req.body.inviteCode, config.clinicianInviteCode))) fail(403, "A valid clinic invitation code is required.");
     if (await store.get("SELECT id FROM users WHERE email=?", email)) fail(409, "Unable to create this account. Try signing in instead.");

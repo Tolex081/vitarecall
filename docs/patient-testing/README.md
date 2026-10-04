@@ -19,18 +19,17 @@ Vita is an AI care-information companion, not a doctor. The medication prompts d
 1. Deploy the persistent backend and the Vercel frontend using [the deployment guide](../DEPLOYMENT.md). Share the public frontend URL, not localhost. Keep Gemini and Walrus keys on the backend only.
 2. Confirm chat, a signed Walrus connection check, reviewed storage, and later recall work through the deployed frontend. Restart the backend and confirm the same profile still opens. Local success alone does not prove public deployment works.
 3. Explain that this is a synthetic-data pilot. Ask permission to use anonymized screenshots and feedback in the hackathon article. Let volunteers decline publishing their identity or quotes.
-4. Assign one distinct profile per tester. Do not share login/recovery codes between testers. Never publish a recovery code, session cookie, API key, or care-team invitation code.
+4. Assign one distinct verified account per tester. Each tester should use their own Telegram account, or their own email account if Telegram is unavailable. Never publish a password, session cookie, API key, or care-team invitation code.
 5. Arrange three short sessions on separate days if possible. Write the actual dates. A same-day reset test is useful, but do not report it as multi-day use.
 
 ## Tester: how to start and return
 
-- Open the supplied site, select **Try the demo**, use an X-style handle, and choose **Patient**. A made-up handle such as `vita_test_p1` is fine. This is not verified X sign-in. An initials avatar is normal if no public photo is available.
-- Copy the private recovery code somewhere safe. Do not include it in screenshots or this report. Dismiss its banner before recording evidence.
+- Open the supplied site and choose **Continue with Telegram**. This verified identity reopens the same workspace on another browser or device. If Telegram is unavailable, create an **Email account** instead. Do not use the one-click **Fictional demo** for a multi-day or cross-device test because it is intentionally disposable.
 - Send prompts one at a time. Read and respond to Vita naturally using only the fictional facts in your script. If it asks for something the script does not specify, say it is unknown; do not invent test results or prescriptions.
-- At sign-up, **Save chats to Walrus automatically** is already checked. Read the fictional-data disclosure; you may uncheck it before continuing. With it on, every new completed exchange includes both your message and Vita's reply, without an individual save action. Pause/resume in **Memory** or **Settings**. Restored older profiles retain their prior setting. Wait for confirmed receipts before recall tests; **View blob on Walrus Scan** opens the mainnet explorer. Older cleared chats require **Also save earlier chats**. See [automatic-memory tests and limitations](../AUTOMATIC-MEMORY.md).
+- New accounts save chats to Walrus automatically. Every new completed exchange includes both the tester's message and Vita's reply, without an individual save action. Pause/resume in **Memory** or **Settings**. Wait for confirmed receipts before recall tests; **View blob on Walrus Scan** opens the mainnet explorer. Older cleared chats require **Also save earlier chats**. See [automatic-memory tests and limitations](../AUTOMATIC-MEMORY.md).
 - Wait for **Stored on Walrus** and a full blob ID. A pending job is not confirmed storage. If a request is uncertain, refresh its receipt; do not submit duplicates just to get a green badge.
 - On day 2 select **New conversation** before the recall question. Do not repeat your name, condition, or preferences in that first question. Verify that the response indicates no previous chat history was sent, and inspect the actual memory sources.
-- On day 3 use another browser or device, choose **Restore demo**, and enter the original handle and private recovery code. Creating a fresh profile with the same public handle intentionally creates a different workspace. After restoring, choose **New conversation** before testing recall again.
+- On day 3 use another browser or device and sign in with the same Telegram account or email account. After the original workspace opens, choose **New conversation** before testing recall again.
 
 ## What counts as evidence
 
@@ -69,4 +68,4 @@ Mark each check **Pass**, **Fail**, or **Not tested**, with the actual response.
 
 Before saving: ask a neutral preferences question in an empty workspace; Vita should not invent a history. After a confirmed save, start a new conversation and ask again without including the answer. Capture the changed response and its source. Do not edit screenshots to make recall look better, simulate return dates, or publish a scripted ideal answer as an observed result.
 
-Optional isolation check, coordinated with the owner: open a different test profile and ask whether it knows the first profile's details without providing those details. It must not retrieve another patient's memories. Keep each person's private recovery code to themselves.
+Optional isolation check, coordinated with the owner: open a different test account and ask whether it knows the first profile's details without providing those details. It must not retrieve another patient's memories. Keep each tester's credentials private.

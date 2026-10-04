@@ -8,9 +8,9 @@ You are Ada, 58. In this story, a clinician diagnosed a stroke six months ago. Y
 
 ## Set up
 
-Use the coordinator's deployed link. Select **Try the demo -> Patient**, enter a fictional handle such as `vita_test_p1`, and privately save the recovery code. A handle is not verified X identity. Do not show the code in evidence. Use this same profile for every visit.
+Use the coordinator's deployed link. Choose **Continue with Telegram** and use your own Telegram account; it is the verified identity that reopens your test workspace on every visit and on another device. If Telegram is unavailable, create an **Email account** instead. Do not use the one-click **Fictional demo** for this multi-day test because it is intentionally disposable.
 
-Read the sign-up disclosure: **Save chats to Walrus automatically** is checked by default for new profiles. Leave it on for this memory test, or opt out before chatting if you do not want uploads. Restored profiles keep their previous setting; inspect **Walrus memory** or **Settings** and resume if needed. Each new completed exchange is queued automatically, including Vita replies. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
+New accounts save chats to Walrus automatically. Each completed exchange is queued automatically, including Vita replies. You can pause saving later in **Patient memory** or **Settings** if needed. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
 
 ## Day 1 - first appointment-style conversation
 
@@ -38,7 +38,7 @@ Send each example below as a separate chat message with automatic memory enabled
 
 > FICTIONAL PATIENT TEST 1. Ada prefers at most three short bullet points and one question at a time. She wants help preparing rehabilitation appointment questions. Her swallowing assessment and current medication details have not been provided; do not infer either from this memory.
 
-Capture the two genuine receipts with recovery codes hidden. Before leaving, note whether Vita was calm, compassionate, and easy to follow. A signed connection badge alone is not proof of either save.
+Capture the two genuine receipts with account details hidden. Before leaving, note whether Vita was calm, compassionate, and easy to follow. A signed connection badge alone is not proof of either save.
 
 ## Day 2 - return without retelling the story
 
@@ -56,7 +56,7 @@ It should acknowledge gaps rather than invent a swallowing clearance, medication
 
 ## Day 3 - another device and a changed preference
 
-On another browser/device, use **Restore demo** with the original handle and private recovery code. Do not create another profile with that handle. Choose **New conversation**, then ask the same neutral recall question from day 2. Record whether the same memory sources return.
+On another browser/device, sign in with the same Telegram account or email account. Choose **New conversation**, then ask the same neutral recall question from day 2. Record whether the same memory sources return.
 
 After that check, say:
 
@@ -78,4 +78,4 @@ Do not treat aspirin as generic first aid for a suspected stroke; stroke types d
 
 ## Report actual results
 
-Record visit dates, the two full blob IDs, recalled source IDs, response timing, an example of the preferred format, and any missed safety boundary. Mark untested checks as not tested. Do not publish the recovery code or claim real stroke patients were treated. Use the [shared scorecard](README.md#scorecard-copy-this-section-for-each-tester).
+Record visit dates, the two full blob IDs, recalled source IDs, response timing, an example of the preferred format, and any missed safety boundary. Mark untested checks as not tested. Do not publish credentials or claim real stroke patients were treated. Use the [shared scorecard](README.md#scorecard-copy-this-section-for-each-tester).

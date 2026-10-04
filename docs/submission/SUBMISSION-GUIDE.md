@@ -58,7 +58,7 @@ The generated walrus images establish character. They must never stand in for pr
 
 Send each volunteer one file from [the five-person test pack](https://github.com/Tolex081/vitarecall/blob/main/docs/patient-testing/README.md). A volunteer portrays a fictional scenario; they need not have the condition. No real health information or personal prescriptions should be entered.
 
-Arrange three short visits across different dates, ideally October 2, 4 and 6. Use actual dates if the plan changes. Each tester keeps their own private recovery code. On the return visit they restore the original profile, start a new conversation, and ask without restating the saved facts. Include a correction, an unrelated question, and a no-invention check. Run scripted safety checks only as synthetic exercises; nobody should follow medication advice produced during a test.
+Arrange three short visits across different dates, ideally October 2, 4 and 6. Use actual dates if the plan changes. Each tester returns with the same Telegram or email account, starts a new conversation, and asks without restating the saved facts. Include a correction, an unrelated question, and a no-invention check. Run scripted safety checks only as synthetic exercises; nobody should follow medication advice produced during a test.
 
 Keep these outcomes separate:
 

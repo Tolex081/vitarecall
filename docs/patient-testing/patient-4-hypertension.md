@@ -6,9 +6,9 @@ This is a fictional roleplay for a real tester, not medical advice or a clinical
 
 Test whether saved patient-reported context makes a return conversation more useful, while Vita keeps appropriate medical boundaries. You need completed mainnet blob receipts and matching recall sources, not just an answer that sounds familiar.
 
-Allow about 15 minutes on day 1 and 5–10 minutes on each return day. Use the organiser's deployed URL, choose **Patient**, and enter a unique demo username such as `grace_test_04`. This is a demo label, not verified X authentication. Keep your private recovery code securely, out of chat and public evidence. On another device use **Restore demo** and this code; creating another account will not restore the same patient memory.
+Allow about 15 minutes on day 1 and 5–10 minutes on each return day. Use the organiser's deployed URL. Choose **Continue with Telegram** and use your own Telegram account; it is the verified identity that reopens your test workspace on every visit and on another device. If Telegram is unavailable, create an **Email account** instead. Do not use the one-click **Fictional demo** for this multi-day test because it is intentionally disposable.
 
-Read the sign-up disclosure: **Save chats to Walrus automatically** is checked by default for new profiles. Leave it on for this memory test, or opt out before chatting if you do not want uploads. Restored profiles keep their previous setting; inspect **Walrus memory** or **Settings** and resume if needed. Each new completed exchange is queued automatically, including Vita replies. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
+New accounts save chats to Walrus automatically. Each completed exchange is queued automatically, including Vita replies. You can pause saving later in **Patient memory** or **Settings** if needed. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
 
 ## Day 1 — start a supportive conversation
 
@@ -34,7 +34,7 @@ Send each example below as a separate chat message with automatic memory enabled
 
 > FICTIONAL TEST PATIENT 4. Grace prefers affordable lower-salt meal examples using rice, beans and vegetable soups, with simple explanations of food labels and a non-judgmental tone. This is a patient-reported preference.
 
-Do not include real health details, recovery codes, an emergency episode, or medication orders. Consent to future saves being off is not evidence that older blobs were deleted.
+Do not include real health details, credentials, an emergency episode, or medication orders. Consent to future saves being off is not evidence that older blobs were deleted.
 
 ## Day 2 — prove recall without repeating the profile
 
@@ -48,7 +48,7 @@ Expected: the correct profile and food preferences, with matching blob sources; 
 
 ## Day 3 — restore on a second device
 
-Use another device or fresh browser profile, choose **Restore demo**, and use your private recovery code. Start **New conversation** rather than relying on the old transcript.
+Use another device or fresh browser profile and sign in with the same Telegram or email account. Start **New conversation** rather than relying on the old transcript.
 
 1. “Without asking me to repeat my earlier profile, what can you retrieve from saved memory to make today's conversation useful? Cite the sources.”
 2. After recording the result: “My fictional meal-example preference has changed: I now prefer oats and vegetable wraps instead of rice-based examples. Please acknowledge this as my current preference.”
@@ -72,7 +72,7 @@ End with: “That emergency was fictional and is over. Please do not store it as
 
 ## Evidence and feedback to send back
 
-Use actual timestamps and replies. Screenshots must exclude the recovery code and real personal information.
+Use actual timestamps and replies. Screenshots must exclude credentials and real personal information.
 
 | Check | Actual timestamp + timezone | Result / evidence |
 | --- | --- | --- |

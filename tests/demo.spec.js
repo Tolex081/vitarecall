@@ -1,5 +1,15 @@
 import { test, expect, isolateFonts } from "./browser-fixtures.js";
 
+test("one-click fictional demo has no social-handle or recovery-code prompt", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByLabel("X / Twitter username", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Clinician", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Explore the fictional demo", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Hello, Fictional." })).toBeVisible();
+  await expect(page.getByLabel("Message Vita", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Save your recovery code", exact: true })).toHaveCount(0);
+});
+
 const nav = (page, name, mobile = false) => page.getByRole("navigation", { name: mobile ? "Mobile navigation" : "Primary navigation", exact: true }).getByRole("button", { name, exact: true });
 const newUsername = () => "demo" + Date.now().toString(36) + Math.random().toString(36).slice(2, 4);
 
@@ -25,7 +35,7 @@ async function createDemo(page, role = "patient", { photo = false, prefixAt = fa
 }
 
 for (const [device, width, height] of [["desktop", 1280, 900], ["mobile", 320, 800]]) {
-  test(`${device}: avatar greeting and sign-out support isolated demo usernames`, async ({ page }) => {
+  test.skip(`${device}: retired handle-based demo flow`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     const mobile = device === "mobile";
     const { username, recoveryCode } = await createDemo(page, "patient", { photo: true, prefixAt: true });
@@ -85,7 +95,7 @@ for (const [device, width, height] of [["desktop", 1280, 900], ["mobile", 320, 8
   });
 }
 
-test("clinician demo needs no invite and restores the same workspace with a private code", async ({ page, browser }) => {
+test.skip("legacy clinician demo is not public sign-in", async ({ page, browser }) => {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   const { username, recoveryCode } = await createDemo(page, "clinician");
@@ -118,7 +128,7 @@ test("clinician demo needs no invite and restores the same workspace with a priv
   expect(errors).toEqual([]);
 });
 
-test.describe("isolated demo memory fixture — no live Walrus or Gemini requests", () => {
+test.describe.skip("retired demo identity memory fixture", () => {
   test.use({ baseURL: "http://127.0.0.1:3188" });
   test("reviewed memory survives a fresh conversation without previous chat history", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });

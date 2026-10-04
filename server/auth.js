@@ -21,7 +21,7 @@ export const publicUser = (user) => user ? ({
   id: user.id, name: user.name, email: user.username || user.telegram_id ? null : user.email, role: user.role,
   isDemo: Boolean(user.username),
   authProvider: user.telegram_id ? "telegram" : user.username ? "demo" : "password",
-  ...(user.username ? { username: user.username, avatarUrl: `/api/avatar/twitter/${user.username}` } : {}),
+  ...(user.username ? { username: user.username } : {}),
 }) : null;
 
 export function createSessions(store, config) {

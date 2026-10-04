@@ -1,17 +1,17 @@
 # Automatic conversation memory
 
-Vita automatically archives complete new exchanges (both the user message and the AI reply). For new demo and patient profiles, automatic memory is **on by default**, with a visible sign-up disclosure and a checked option that can be unchecked before continuing. There is no per-message save button. This remains a fictional-data pilot, not a clinical-record system.
+Vita automatically archives complete new exchanges (both the user message and the AI reply). For new patient and fictional-demo profiles, automatic memory is **on by default**. There is no per-message save button. It can be paused later in the workspace; this remains a fictional-data pilot, not a clinical-record system.
 
 Existing profiles keep their current setting. Login, restore, a new conversation, and an app update never turn an explicit off choice back on. Legacy profiles with no automatic-memory setting also remain off; reviewed-note consent is not treated as permission to upload whole transcripts. This release changes new-profile initialization, not historical records, and needs no database migration.
 
 ## Try it
 
-1. Restore the same demo profile with its username and private recovery code.
-2. New profiles already have automatic memory on unless you unchecked it at sign-up. On desktop, inspect the panel beside Chat with Vita; on phones, tap **Walrus memory** or **Memory**. You can pause/resume here or in **Settings**. If restoring an older or opted-out profile, its previous setting is preserved.
+1. Sign in with the same verified Telegram account or email account on the device you are using. The one-click fictional demo is intentionally disposable and cannot be restored.
+2. New profiles already have automatic memory on. On desktop, inspect the panel beside Chat with Vita; on phones, tap **Walrus memory** or **Memory**. You can pause/resume here or in **Settings**. If opening an older or opted-out profile, its previous setting is preserved.
 3. Share a fictional name, a concern, and a useful preference. Ask a practical question.
 4. Wait for confirmed chat parts. In **Patient memory**, expand **Chat archive receipts** to see the actual job and full mainnet blob IDs. **View blob on Walrus Scan** opens `https://walruscan.com/mainnet/blob/<full-blob-id>`. Recalled sources link to the same explorer. A queued or processing part is not proof of storage; explorer indexing may lag, and the encrypted blob is not a readable chat transcript.
 5. Select **New conversation**. Ask what Vita remembers without repeating the detail. Inspect the reply's Walrus source IDs and **No previous chat history sent** trace.
-6. Restore this profile in another browser and repeat. A new demo username creates an isolated profile; it cannot recover this memory.
+6. Sign in to this profile in another browser with the same Telegram or email account and repeat.
 
 For older chats, including cleared ones, explicitly select **Also save earlier chats** in Patient memory. This queues up to ten previously unarchived completed exchanges per click. Repeat if the notice says more remain. No prior transcript is uploaded solely because the app was upgraded or because manual-save consent was enabled.
 
@@ -19,7 +19,7 @@ For older chats, including cleared ones, explicitly select **Also save earlier c
 
 - **New conversation** hides earlier messages and excludes the old local transcript from the model's conversation history. It does not delete SQL records, the archive queue, or Walrus blobs. Relevant saved text may still be retrieved from Walrus and sent to Gemini.
 - **Pause automatic memory** stops future archiving and cancels unsent queued parts. It cannot cancel a submission already in flight, and it does not delete existing stored memory. Previously cancelled parts are not silently requeued when re-enabled.
-- Recovery credentials, API keys, and session tokens are never included in the archive.
+- Passwords, API keys, session tokens, and Telegram login proofs are never included in the archive.
 - Private conversation archives are scoped to both patient and user. They are separate from reviewed memories shared within a care workspace. Linking a clinician does not grant access to a patient's private transcript archive.
 
 ## Delivery and honest limitations

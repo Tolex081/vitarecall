@@ -113,7 +113,7 @@ This is an illustrative excerpt, not a complete worker. The surrounding code han
 
 Private chat archives are scoped by profile. Retrieved archive envelopes are checked against the authorized user and patient before becoming model context. Large exchanges are split into bounded parts rather than silently truncated. The UI exposes the retrieved sources, while the reply trace distinguishes recalled context from ordinary chat history.
 
-Restoring the original profile matters. An X-style username is a display label, not verified X authentication. A private recovery code restores the workspace; creating another profile with the same handle intentionally does not inherit its memories.
+Restoring the original profile matters. VitaRecall now uses Telegram's verified signed identity as the primary cross-device account, with email as a fallback. The one-click fictional demo is intentionally disposable, so it cannot be mistaken for an authenticated returning patient workspace.
 
 ## Remembering also means noticing when something changes
 

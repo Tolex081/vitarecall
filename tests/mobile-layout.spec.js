@@ -3,12 +3,8 @@ import { test, expect } from './browser-fixtures.js';
 test.use({ baseURL: 'http://127.0.0.1:3188' });
 const mobileNav = (page, name) => page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('button', { name, exact: true });
 async function start(page) {
-  await page.route('**/api/avatar/twitter/**', route => route.fulfill({ status: 404, body: '' }));
   await page.goto('/');
-  await page.getByLabel('X / Twitter username', { exact: true }).fill('phone' + Date.now().toString(36));
-  await page.getByRole('button', { name: 'Start chatting with Vita', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Save your recovery code' })).toBeVisible();
-  await page.getByRole('button', { name: "I've saved my code", exact: true }).click();
+  await page.getByRole('button', { name: 'Explore the fictional demo', exact: true }).click();
   await expect(page.locator('.app-shell')).toHaveClass(/compact-chat/);
 }
 async function fits(page, visibleHeight) {
@@ -54,7 +50,7 @@ for (const [width, height] of [[320, 568], [390, 844], [430, 932]]) {
     await mobileNav(page, 'Settings').click();
     await expect(page.getByRole('heading', { name: 'Memory & privacy', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await expect(page.getByLabel('X / Twitter username', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('X / Twitter username', { exact: true })).toHaveCount(0);
   });
 }
 test('keyboard-sized viewport keeps the composer visible and restores navigation on blur', async ({ page }) => {

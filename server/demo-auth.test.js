@@ -104,7 +104,7 @@ test('a demo handle creates an isolated unverified workspace and a once-only has
   assert.equal(user.name, '@demo_user');
   assert.equal(user.isDemo, true);
   assert.equal(user.email, null);
-  assert.equal(user.avatarUrl, '/api/avatar/twitter/demo_user');
+  assert.equal(user.avatarUrl, undefined);
   assert.equal('password_hash' in user, false);
   assert.match(created.headers.get('set-cookie'), /HttpOnly/);
   assert.match(created.headers.get('set-cookie'), /SameSite=Strict/);
@@ -125,6 +125,27 @@ test('a demo handle creates an isolated unverified workspace and a once-only has
   const loaded = await first.request('GET', '/api/session');
   assert.equal(loaded.body.user.username, 'demo_user');
   assert.equal('recoveryCode' in loaded.body, false);
+});
+
+test('one-click fictional demos use a fresh patient workspace without a social username prompt or recovery response', async t => {
+  const app = await harness(t), first = app.client(), second = app.client();
+  await first.request('GET', '/api/session');
+  const created = await first.request('POST', '/api/auth/demo/quick', {});
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  assert.equal(created.body.user.name, 'Fictional demo');
+  assert.equal(created.body.user.authProvider, 'demo');
+  assert.match(created.body.user.username, /^demo_[a-f0-9]{10}$/);
+  assert.equal(created.body.user.avatarUrl, undefined);
+  assert.equal('recoveryCode' in created.body, false);
+  const patient = await first.patient();
+  const workspace = await first.request('GET', patientUrl(patient, 'workspace'));
+  assert.equal(workspace.body.conversationMemory.enabled, true);
+
+  await second.request('GET', '/api/session');
+  const another = await second.request('POST', '/api/auth/demo/quick', {});
+  assert.equal(another.status, 201);
+  assert.notEqual(another.body.user.id, created.body.user.id);
+  assert.notEqual(another.body.user.username, created.body.user.username);
 });
 
 test('verified Telegram sign-in is unique across browsers and reopens a previously bot-linked workspace', async t => {

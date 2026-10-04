@@ -35,7 +35,7 @@ To test the PostgreSQL-backed app locally, keep `APP_ORIGIN=http://localhost:517
 
 ### Existing localhost profiles are not automatically imported
 
-An empty Supabase project has no existing local accounts or receipts. A localhost recovery code cannot restore an account absent from the deployed database. For the five-tester pilot, create profiles on the deployed URL and return to that same deployment.
+An empty Supabase project has no existing local accounts or receipts. A local Telegram or email account cannot reopen a workspace that was never created in the deployed database. For the five-tester pilot, create profiles on the deployed URL and return to that same deployment.
 
 If preserving local profiles is required, use the optional explicit importer **before** creating profiles in Supabase. Stop the local API first, make a private consistent SQLite backup, and run `npm run db:migrate` against the intended Supabase project. With that PostgreSQL `DATABASE_URL` configured privately, run:
 
@@ -83,10 +83,10 @@ These checks still need to run against the actual deployed project:
 
 1. `/api/health` on the frontend domain must return JSON, not HTML, a redirect, or a 404. A green health endpoint is not a live Gemini/Walrus verification.
 2. In a fresh browser profile, open the app and inspect `/api/session`. Its cookie must belong to the frontend host and have HttpOnly, Secure, SameSite Strict, and path `/`. Refresh and confirm the same session persists. Do not copy cookie values into reports. API responses must have `Cache-Control: no-store`.
-3. Create a fictional patient. Confirm the creation POST goes to the same origin with the CSRF header. Save the recovery code privately. Confirm a POST with a wrong `Origin` or missing/incorrect CSRF token is rejected.
+3. In a fresh browser profile, choose **Continue with Telegram** or create an **Email account**. Confirm the authenticated POST goes to the same origin with the CSRF header. Confirm a POST with a wrong `Origin` or missing/incorrect CSRF token is rejected.
 4. Send a harmless greeting for an actual Gemini response, and run the signed Walrus connection test in Settings. Configured badges alone do not prove live access.
 5. With consent, save one useful fictional memory, wait for **stored** and its full blob ID, then choose **New conversation**. Ask about that detail without repeating it; inspect the retrieved source and confirm the trace says no old chat history was used. Check the existing receipt before retrying an ambiguous save timeout.
-6. Restore the same profile in a different browser/device using the private recovery code. Start a new conversation and confirm recall. Re-entering the same public X handle without its code creates a separate workspace; it does not recover an account.
+6. Sign in to the same profile in a different browser/device with the same Telegram account or email account. Start a new conversation and confirm recall. The one-click fictional demo is deliberately a new, disposable workspace each time.
 7. Redeploy the Vercel app without changing the database or Walrus account. Confirm the existing session/profile, consent, receipts and recall survive. Also verify phone layout and concurrent duplicate-request behavior.
 8. Record actual dates, receipts and failures with the [five fictional patient scripts](patient-testing/README.md). Do not call a pending job a blob or manufacture evidence.
 

@@ -1,6 +1,6 @@
 # The demo: make the memory observable
 
-This is a controlled fictional demonstration, not a patient testimonial. Use a new isolated profile. Do not reuse another person's workspace, publish a recovery code, or pretend a same-day session happened days later.
+This is a controlled fictional demonstration, not a patient testimonial. Use a new isolated profile. Do not reuse another person's workspace, publish credentials, or pretend a same-day session happened days later.
 
 ## The story in 90 seconds
 

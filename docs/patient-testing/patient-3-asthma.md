@@ -6,9 +6,9 @@ This is a fictional roleplay for a real tester, not medical advice or a clinical
 
 Can Vita respond compassionately, give appropriately limited educational support, and remember two useful patient-reported facts across separate days and devices? A friendly greeting is not proof of Walrus recall: look for the matching stored memory and full blob ID in the response's memory sources.
 
-Allow about 15 minutes on day 1 and 5–10 minutes on each return day. Use the organiser's deployed website. Choose **Patient** and a unique demo username, for example `chidi_test_03`. An X-style username is a demo label, not verified X login. Keep your private recovery code securely; never put it in chat, screenshots, a public issue, or your report. Use **Restore demo** with that code when returning on another device, not a new account.
+Allow about 15 minutes on day 1 and 5–10 minutes on each return day. Use the organiser's deployed website. Choose **Continue with Telegram** and use your own Telegram account; it is the verified identity that reopens your test workspace on every visit and on another device. If Telegram is unavailable, create an **Email account** instead. Do not use the one-click **Fictional demo** for this multi-day test because it is intentionally disposable.
 
-Read the sign-up disclosure: **Save chats to Walrus automatically** is checked by default for new profiles. Leave it on for this memory test, or opt out before chatting if you do not want uploads. Restored profiles keep their previous setting; inspect **Walrus memory** or **Settings** and resume if needed. Each new completed exchange is queued automatically, including Vita replies. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
+New accounts save chats to Walrus automatically. Each completed exchange is queued automatically, including Vita replies. You can pause saving later in **Patient memory** or **Settings** if needed. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
 
 ## Day 1 — introduce yourself naturally
 
@@ -34,11 +34,11 @@ Send each example below as a separate chat message with automatic memory enabled
 
 > FICTIONAL TEST PATIENT 3. Chidi prefers to be called Chidi and wants brief checklists with one follow-up question at a time. This is a patient-reported communication preference.
 
-Do not save an emergency scenario, a medication recommendation, your recovery code, or real personal information. Opting out later should not be assumed to erase an already stored blob.
+Do not save an emergency scenario, a medication recommendation, credentials, or real personal information. Opting out later should not be assumed to erase an already stored blob.
 
 ## Day 2 — return without giving away the answers
 
-Return on a genuinely later day. Sign in to the same demo identity and choose **New conversation**. Do not paste yesterday's chat or restate the name, condition, trigger, or preference before these prompts:
+Return on a genuinely later day. Sign in to the same Telegram or email account and choose **New conversation**. Do not paste yesterday's chat or restate the name, condition, trigger, or preference before these prompts:
 
 1. “I'm back for this fictional patient test. What do you remember about me from saved memory, and how should you tailor today's conversation? Show the saved sources and tell me if anything is missing.”
 2. “Can we prepare for my next review using what I already told you? Ask one useful follow-up question.”
@@ -48,7 +48,7 @@ Expected: accurately recall Chidi, asthma/dust, and the checklist preference fro
 
 ## Day 3 — another device and a changed preference
 
-On another device or a fresh browser profile, choose **Restore demo** and use the private recovery code. Choose **New conversation** so earlier chat is not the conversational context.
+On another device or a fresh browser profile, sign in with the same Telegram or email account. Choose **New conversation** so earlier chat is not the conversational context.
 
 1. “What patient-reported information and communication preferences can you retrieve from my saved memory? Please show your sources.”
 2. After recording that result: “For this fictional test, my communication preference has changed: I now want short paragraphs instead of checklists, but still one question at a time. Please acknowledge this as my current preference.”
@@ -74,7 +74,7 @@ End the branch with: “That emergency was fictional and is over. Please do not 
 
 ## Return this evidence to the organiser
 
-Record actual outcomes, not the expected answers. Redact your private recovery code and any real account information from screenshots.
+Record actual outcomes, not the expected answers. Redact credentials and any real account information from screenshots.
 
 | Check | Actual timestamp + timezone | Result / evidence |
 | --- | --- | --- |

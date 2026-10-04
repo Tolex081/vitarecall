@@ -4,12 +4,8 @@ test.use({ baseURL: 'http://127.0.0.1:3188' });
 const send = page => page.getByRole('button', { name: 'Send message', exact: true });
 const composer = page => page.getByLabel('Message Vita', { exact: true });
 async function start(page) {
-  await page.route('**/api/avatar/twitter/**', route => route.fulfill({ status: 404, body: '' }));
   await page.goto('/');
-  await page.getByLabel('X / Twitter username', { exact: true }).fill('chat' + Date.now().toString(36));
-  await page.getByRole('checkbox', { name: 'Save chats to Walrus automatically', exact: true }).uncheck();
-  await page.getByRole('button', { name: 'Start chatting with Vita', exact: true }).click();
-  await page.getByRole('button', { name: "I've saved my code", exact: true }).click();
+  await page.getByRole('button', { name: 'Explore the fictional demo', exact: true }).click();
   await expect(composer(page)).toBeVisible();
 }
 

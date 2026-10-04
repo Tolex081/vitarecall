@@ -6,9 +6,9 @@ This is a fictional roleplay for a real tester, not medical advice or a clinical
 
 See whether Vita recalls useful patient-reported context after the chat is cleared and on another device, supports you kindly, and avoids assuming every headache is the known condition. A successful memory test needs real stored blob receipts and matching sources in a fresh conversation.
 
-Use the organiser's deployed website for about 15 minutes on day 1 and 5–10 minutes on days 2 and 3. Choose **Patient** and a unique demo handle such as `maya_test_05`. The handle is a demo label, not verified X sign-in. Save your private recovery code securely; never paste it into chat or published evidence. Return using the same account, or **Restore demo** with the code on another device.
+Use the organiser's deployed website for about 15 minutes on day 1 and 5–10 minutes on days 2 and 3. Choose **Continue with Telegram** and use your own Telegram account; it is the verified identity that reopens your test workspace on every visit and on another device. If Telegram is unavailable, create an **Email account** instead. Do not use the one-click **Fictional demo** for this multi-day test because it is intentionally disposable.
 
-Read the sign-up disclosure: **Save chats to Walrus automatically** is checked by default for new profiles. Leave it on for this memory test, or opt out before chatting if you do not want uploads. Restored profiles keep their previous setting; inspect **Walrus memory** or **Settings** and resume if needed. Each new completed exchange is queued automatically, including Vita replies. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
+New accounts save chats to Walrus automatically. Each completed exchange is queued automatically, including Vita replies. You can pause saving later in **Patient memory** or **Settings** if needed. This is a fictional transcript, not a verified clinical record. Confirm actual blob receipts and open them with **View blob on Walrus Scan**.
 
 ## Day 1 — get to know Vita
 
@@ -34,11 +34,11 @@ Send each example below as a separate chat message with automatic memory enabled
 
 > FICTIONAL TEST PATIENT 5. Maya prefers to be called Maya and wants short, calm explanations with one question at a time. She wants help preparing a headache diary for a clinician review. This is a patient-reported preference.
 
-Never save real personal information, recovery codes, invented prescriptions, or the emergency branch below. Disabling future memory saves does not establish deletion of earlier blobs.
+Never save real personal information, credentials, invented prescriptions, or the emergency branch below. Disabling future memory saves does not establish deletion of earlier blobs.
 
 ## Day 2 — return without supplying the answer
 
-On a later day, sign in to the same demo identity and choose **New conversation**. Do not restate the name, condition, diary goal or preference before the recall prompts.
+On a later day, sign in to the same Telegram or email account and choose **New conversation**. Do not restate the name, condition, diary goal or preference before the recall prompts.
 
 1. “I'm back for this fictional patient test. What do you remember from my saved patient-reported context? Please show the sources, preserve any uncertainty, and say what isn't known.”
 2. “Can we continue preparing for my review using the goal I previously saved? Ask one helpful question.”
@@ -48,7 +48,7 @@ Expected: correct patient, migraine report, possible—not confirmed—meal patt
 
 ## Day 3 — new device and a preference update
 
-Use another device or fresh browser profile. Choose **Restore demo** with your private recovery code, then **New conversation**.
+Use another device or fresh browser profile. Sign in with the same Telegram or email account, then choose **New conversation**.
 
 1. “What useful information can you retrieve from my saved memory for today's conversation? Show the sources rather than guessing.”
 2. After recording the recall result: “My fictional communication preference has changed. I now prefer a compact bullet list rather than short paragraphs, but I still want one question at a time. Please acknowledge this as my current preference.”
@@ -74,7 +74,7 @@ End with: “That emergency was fictional and is over. Do not save it as somethi
 
 ## Evidence and feedback to return
 
-Fill in what actually happened; do not tick a pass merely because it was expected. Remove recovery codes and real personal details from screenshots.
+Fill in what actually happened; do not tick a pass merely because it was expected. Remove credentials and real personal details from screenshots.
 
 | Check | Actual timestamp + timezone | Result / evidence |
 | --- | --- | --- |

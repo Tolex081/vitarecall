@@ -24,7 +24,7 @@ The architecture graphic is a deterministic SVG rendered to PNG, not AI-generate
 
 1. Confirm every image opens, its caption is accurate, and text is legible on a phone.
 2. Keep illustration and evidence labels explicit. Do not use an illustration as a thumbnail that claims to show a real patient.
-3. Check for credentials, real names, browser notifications, recovery codes, unrelated account information, and user-specific data. Only the dedicated fictional profile is approved for this package.
+3. Check for credentials, real names, browser notifications, unrelated account information, and user-specific data. Only the dedicated fictional profile is approved for this package.
 4. The public evidence intentionally excludes the private login, patient/user IDs, cookies and keys. Never upload the ignored `data` folder or `.env`.
 5. Add volunteer screenshots only with permission; create a new sanitized asset, never overwrite the factual controlled-demo record with a staged improvement.
 6. Replace local article links with final public URLs after hosting. Do not post an inaccessible local path on Medium or X.
