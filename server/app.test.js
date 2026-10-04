@@ -376,6 +376,21 @@ test('password authentication preserves leading and trailing whitespace exactly'
   assert.equal(exact.body.user.name, 'Alice');
 });
 
+test('patient email registration accepts a six-character password and rejects a shorter one', async (t) => {
+  const app = await harness(t);
+  const client = browser(app);
+  await client.request('GET', '/api/session');
+  const tooShort = await client.request('POST', '/api/auth/register', {
+    name: 'Short Password', email: 'short@example.test', password: '12345', role: 'patient',
+  });
+  assert.equal(tooShort.status, 400);
+  const accepted = await client.request('POST', '/api/auth/register', {
+    name: 'Six Characters', email: 'six@example.test', password: '123456', role: 'patient',
+  });
+  assert.equal(accepted.status, 201);
+  assert.equal(accepted.body.user.role, 'patient');
+});
+
 test('patient isolation covers workspaces, messages, notes, tasks, recall and blob receipts', async (t) => {
   const app = await harness(t);
   const { client: alice, patient: a } = await patientSetup(app, 'Alice');

@@ -199,7 +199,7 @@ export function createApp({ config, store, memory, chat, telegram = { configured
     const name = input(req.body.name, "Name", 80, 2);
     const email = input(req.body.email, "Email", 254, 3).toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, "Enter a valid email address.");
-    input(req.body.password, "Password", 128, 12);
+    input(req.body.password, "Password", 128, 6);
     const password = req.body.password;
     const role = req.body.role;
     if (!["patient", "clinician"].includes(role)) fail(400, "Choose patient or clinician.");
